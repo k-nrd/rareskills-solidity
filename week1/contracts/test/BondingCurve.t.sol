@@ -72,9 +72,6 @@ contract BondingCurveTokenTest is Test {
         uint256 tokensToSell = 5;
         uint256 minEth = token.toEther(tokensToSell) - token.price(); // Setting a lower slippage tolerance
 
-        emit log_uint(address(token).balance);
-        emit log_uint(token.toEther(tokensToSell));
-
         // Assert
         token.sell(minEth, tokensToSell, "");
         assertGt(alice.balance, minEth, "User should have received at least the minimum Ether.");

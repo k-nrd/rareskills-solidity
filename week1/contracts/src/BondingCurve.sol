@@ -21,6 +21,9 @@ contract BondingCurveToken is ERC777 {
     /// @notice Indicates if a function is currently being executed, used for reentrancy guard.
     bool private locked = false;
 
+    event Buy();
+    event Sell();
+
     /// @notice Constructor to create BondingCurveToken
     /// @param name_ Name of the token.
     /// @param symbol_ Symbol of the token.
@@ -65,7 +68,7 @@ contract BondingCurveToken is ERC777 {
     /// @notice Allows users to buy tokens with Ether, specifying a minimum number of tokens to receive.
     /// @param minTokens The minimum number of tokens the buyer is willing to accept.
     /// @param userData Additional data provided by the token holder (if any).
-    function buy(uint256 minTokens, bytes calldata userData) public payable {
+    function buy(uint256 minTokens, bytes calldata userData) external payable {
         _buy(minTokens, msg.sender, userData, "");
     }
 
@@ -86,7 +89,7 @@ contract BondingCurveToken is ERC777 {
     /// @param minEth The minimum amount of Ether the seller is willing to accept.
     /// @param amount The amount of tokens to sell.
     /// @param userData Additional data provided by the token holder (if any).
-    function sell(uint256 minEth, uint256 amount, bytes calldata userData) public {
+    function sell(uint256 minEth, uint256 amount, bytes calldata userData) external {
         _sell(minEth, msg.sender, amount, userData, "");
     }
 

@@ -27,6 +27,7 @@ contract SanctionedToken is ERC777 {
     /// @param symbol_ Symbol of the token.
     /// @param totalSupply_ How many tokens to mint for the owner on deploy.
     constructor(string memory name_, string memory symbol_, uint256 totalSupply_) ERC777(name_, symbol_, 0, 1) {
+        // This only makes sense if we plan on changing it later, else it's unnecessary storage use
         owner = msg.sender;
         _mint(owner, totalSupply_, "", "", false);
     }
@@ -40,7 +41,7 @@ contract SanctionedToken is ERC777 {
     /// @notice Bans an address, preventing it from sending, receiving, burning, or minting tokens.
     /// @dev Can only be called by the contract owner.
     /// @param _target The address to be banned.
-    function ban(address _target) public virtual onlyOwner {
+    function ban(address _target) external virtual onlyOwner {
         require(!banlist[_target], "Target is already banned.");
         banlist[_target] = true;
         emit Banned(_target);
@@ -49,7 +50,7 @@ contract SanctionedToken is ERC777 {
     /// @notice Unbans an address, allowing it to send, receive, burn, or mint tokens again.
     /// @dev Can only be called by the contract owner.
     /// @param _target The address to be unbanned.
-    function unban(address _target) public virtual onlyOwner {
+    function unban(address _target) external virtual onlyOwner {
         require(banlist[_target], "Target is already unbanned.");
         banlist[_target] = false;
         emit Unbanned(_target);
