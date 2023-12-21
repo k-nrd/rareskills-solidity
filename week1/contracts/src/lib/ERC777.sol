@@ -6,11 +6,12 @@ import {ERC777TokensSender} from "./ERC777TokensSender.sol";
 import {ERC777TokensRecipient} from "./ERC777TokensRecipient.sol";
 import {IERC1820Registry} from "openzeppelin/interfaces/IERC1820Registry.sol";
 import {Address} from "openzeppelin/utils/Address.sol";
+import {IERC20} from "openzeppelin/token/ERC20/IERC20.sol";
 
 /// @title A flexbible implementation of ERC777
 /// @author Gustavo Konrad
 /// @dev This is based on both the reference implementation and the (now deprecated) OpenZeppelin implementation
-contract ERC777 is ERC777Token {
+contract ERC777 is ERC777Token, IERC20 {
     IERC1820Registry internal constant _ERC1820_REGISTRY = IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
     bytes32 private constant _TOKENS_SENDER_INTERFACE_HASH = keccak256("ERC777TokensSender");
     bytes32 private constant _TOKENS_RECIPIENT_INTERFACE_HASH = keccak256("ERC777TokensRecipient");
@@ -23,9 +24,6 @@ contract ERC777 is ERC777Token {
 
     /// @notice Total supply of the token.
     uint256 private _totalSupply;
-
-    /// @notice The smallest part into which the token can be divided.
-    uint256 private _granularity;
 
     // @notice Array of addresses that are allowed to manage tokens on behalf of others.
     address[] private _defaultOperatorsArray;
@@ -42,15 +40,18 @@ contract ERC777 is ERC777Token {
     /// @notice Mapping of address pairs to their revoked default operator status.
     mapping(address => mapping(address => bool)) private _revokedDefaultOperators;
 
+    // @notice ERC20-allowances
+    mapping(address => mapping(address => uint256)) private _allowances;
+
     /// @dev Sets the initial values for {_name}, {_symbol} and {_granularity}.
     /// Mints {totalSupply_} tokens for the deployed, setting {_totalSupply} indirectly.
     /// Registers the contract with the ERC1820 registry.
-    constructor(string memory name_, string memory symbol_, uint256 totalSupply_, uint256 granularity_) {
+    constructor(string memory name_, string memory symbol_, uint256 totalSupply_) {
         _name = name_;
         _symbol = symbol_;
-        _granularity = granularity_;
         _totalSupply = totalSupply_;
         _ERC1820_REGISTRY.setInterfaceImplementer(address(this), keccak256("ERC777Token"), address(this));
+        _ERC1820_REGISTRY.setInterfaceImplementer(address(this), keccak256("ERC20Token"), address(this));
     }
 
     /// @notice Gets the name of the token.
@@ -67,21 +68,25 @@ contract ERC777 is ERC777Token {
 
     /// @notice Gets the total supply of the token.
     /// @return The total supply of the token.
-    function totalSupply() public view virtual returns (uint256) {
+    function totalSupply() public view virtual override(ERC777Token, IERC20) returns (uint256) {
         return _totalSupply;
     }
 
     /// @notice Gets the balance of a specific address.
     /// @param holder The address to query the balance of.
     /// @return The amount of tokens owned by the specified address.
-    function balanceOf(address holder) public view virtual returns (uint256) {
+    function balanceOf(address holder) public view virtual override(ERC777Token, IERC20) returns (uint256) {
         return _balances[holder];
+    }
+
+    function decimals() public pure virtual returns (uint8) {
+        return 18;
     }
 
     /// @notice Gets the granularity of the token.
     /// @return The smallest part into which the token can be divided.
-    function granularity() public view virtual returns (uint256) {
-        return _granularity;
+    function granularity() public pure virtual returns (uint256) {
+        return 1;
     }
 
     /// @notice Lists all the default operators of the token.
@@ -115,8 +120,85 @@ contract ERC777 is ERC777Token {
     /// @param to The recipient's address.
     /// @param amount The amount of tokens to send.
     /// @param userData Additional data to send with the transfer.
+    /// @dev Reverts if the recipient is a contract that does not implement ERC777TokensRecipient.
+    ///      Emits a {Sent} event.
     function send(address to, uint256 amount, bytes calldata userData) public virtual {
-        _send(msg.sender, to, amount, userData, "", false);
+        _send(msg.sender, to, amount, userData, "", true);
+    }
+
+    /// @notice Sends an amount of tokens to a recipient address.
+    /// @param recipient The recipient's address.
+    /// @param amount The amount of tokens to send.
+    /// @dev Does not revert if the recipient is a contract that does not implement ERC777TokensRecipient.
+    ///      Emits a {Sent} event and a {Transfer} event.
+    function transfer(address recipient, uint256 amount) public virtual override returns (bool) {
+        _send(msg.sender, recipient, amount, "", "", false);
+        return true;
+    }
+
+    /// @dev See {IERC20-allowance}.
+    ///
+    /// Note that operator and allowance concepts are orthogonal: operators may
+    /// not have allowance, and accounts with allowance may not be operators
+    /// themselves.
+    function allowance(address holder, address spender) public view virtual override returns (uint256) {
+        return _allowances[holder][spender];
+    }
+
+    /// @dev See {IERC20-approve}.
+    ///
+    /// NOTE: If `value` is the maximum `uint256`, the allowance is not updated on
+    /// `transferFrom`. This is semantically equivalent to an infinite approval.
+    ///
+    /// Note that accounts cannot have allowance issued by their operators.
+    function approve(address spender, uint256 value) public virtual override returns (bool) {
+        address holder = msg.sender;
+        _approve(holder, spender, value);
+        return true;
+    }
+
+    /// @dev See {ERC20-_approve}.
+    ///
+    /// Note that accounts cannot have allowance issued by their operators.
+    function _approve(address holder, address spender, uint256 value) internal virtual {
+        require(holder != address(0), "ERC777: Approve from the zero address.");
+        require(spender != address(0), "ERC777: Approve to the zero address.");
+
+        _allowances[holder][spender] = value;
+        emit Approval(holder, spender, value);
+    }
+
+    /// @dev Updates `owner` s allowance for `spender` based on spent `amount`.
+    ///
+    /// Does not update the allowance amount in case of infinite allowance.
+    /// Revert if not enough allowance is available.
+    ///
+    /// Might emit an {IERC20-Approval} event.
+    function _spendAllowance(address owner, address spender, uint256 amount) internal virtual {
+        uint256 currentAllowance = allowance(owner, spender);
+        if (currentAllowance != type(uint256).max) {
+            require(currentAllowance >= amount, "ERC777: Insufficient allowance.");
+            unchecked {
+                _approve(owner, spender, currentAllowance - amount);
+            }
+        }
+    }
+
+    /// @dev See {IERC20-transferFrom}.
+    ///
+    /// NOTE: Does not update the allowance if the current allowance
+    /// is the maximum `uint256`.
+    ///
+    /// Note that operator and allowance concepts are orthogonal: operators cannot
+    /// call `transferFrom` (unless they have allowance), and accounts with
+    /// allowance cannot call `operatorSend` (unless they are operators).
+    ///
+    /// Emits {Sent}, {IERC20-Transfer} and {IERC20-Approval} events.
+    function transferFrom(address holder, address recipient, uint256 amount) public virtual override returns (bool) {
+        address spender = msg.sender;
+        _spendAllowance(holder, spender, amount);
+        _send(holder, recipient, amount, "", "", false);
+        return true;
     }
 
     /// @notice Allows an operator to send tokens on behalf of another address.
@@ -180,13 +262,6 @@ contract ERC777 is ERC777Token {
             delete _operators[msg.sender][operator];
         }
         emit RevokedOperator(operator, msg.sender);
-    }
-
-    /// @dev Internal function to check if an amount is a valid multiple of granularity.
-    /// @param amount The amount to check.
-    /// @return True if the amount is a valid multiple of granularity, false otherwise.
-    function _isValidGranularity(uint256 amount) internal view returns (bool) {
-        return amount % _granularity == 0;
     }
 
     /// @dev Call `tokensToSend()` on an implementer if one is registered for the
@@ -275,7 +350,7 @@ contract ERC777 is ERC777Token {
     /// @param userData Extra information provided by the token holder (if any).
     /// @param operatorData Extra information provided by the operator (if any).
     /// @param requireReceptionAck If `true`, contract recipients are required to
-    /// implement {ERC777TokensRecipient}.
+    ///        implement {ERC777TokensRecipient}.
     function _mint(
         address account,
         uint256 amount,
@@ -284,7 +359,6 @@ contract ERC777 is ERC777Token {
         bool requireReceptionAck
     ) internal virtual {
         require(account != address(0), "ERC777: Cannot mint to the zero address");
-        require(_isValidGranularity(amount), "ERC777: Amount is not a multiple of granularity");
 
         _callTokensToSend(msg.sender, address(0), account, amount, userData, operatorData);
 
@@ -294,6 +368,7 @@ contract ERC777 is ERC777Token {
         _callTokensReceived(msg.sender, address(0), account, amount, userData, operatorData, requireReceptionAck);
 
         emit Minted(msg.sender, account, amount, userData, operatorData);
+        emit Transfer(address(0), account, amount);
     }
 
     /// @dev See {_send}
@@ -314,7 +389,7 @@ contract ERC777 is ERC777Token {
     ///
     /// See {ERC777TokenSender} and {ERC777TokenRecipient}.
     ///
-    /// Emits the {Sent} event.
+    /// Emits the {Sent} event and the {Transfer} event.
     ///
     /// Requirements
     ///
@@ -330,7 +405,7 @@ contract ERC777 is ERC777Token {
     /// @param userData Extra information provided by the token holder (if any).
     /// @param operatorData Extra information provided by the operator (if any).
     /// @param requireReceptionAck If `true`, contract recipients are required to
-    /// implement {ERC777TokensRecipient}.
+    ///        implement {ERC777TokensRecipient}.
     function _send(
         address from,
         address to,
@@ -341,7 +416,6 @@ contract ERC777 is ERC777Token {
     ) internal virtual {
         require(from != address(0), "ERC777: Sender cannot be the zero address.");
         require(to != address(0), "ERC777: Receiver cannot be the zero address.");
-        require(_isValidGranularity(amount), "ERC777: Amount is not a multiple of granularity");
 
         _callTokensToSend(msg.sender, from, to, amount, userData, operatorData);
 
@@ -353,6 +427,7 @@ contract ERC777 is ERC777Token {
         _balances[to] += amount;
 
         emit Sent(msg.sender, from, to, amount, userData, operatorData);
+        emit Transfer(from, to, amount);
 
         _callTokensReceived(msg.sender, from, to, amount, userData, operatorData, requireReceptionAck);
     }
@@ -365,7 +440,7 @@ contract ERC777 is ERC777Token {
     /// @dev Burns `amount` tokens from `from` address, decreasing `from` balance
     /// by that `amount` and decreasing `totalSupply` by that same `amount`.
     ///
-    /// Emits the {Burned} event.
+    /// Emits the {Burned} event and the {Transfer} event.
     ///
     /// Requirements
     ///
@@ -377,7 +452,7 @@ contract ERC777 is ERC777Token {
     /// @param userData Extra information provided by the token holder (if any).
     /// @param operatorData Extra information provided by the operator (if any).
     /// @param requireReceptionAck If `true`, contract recipients are required to
-    /// implement {ERC777TokensRecipient}.
+    ///        implement {ERC777TokensRecipient}.
     function _burn(
         address from,
         uint256 amount,
@@ -386,7 +461,6 @@ contract ERC777 is ERC777Token {
         bool requireReceptionAck
     ) internal virtual {
         require(from != address(0), "ERC777: Sender cannot be the zero address.");
-        require(_isValidGranularity(amount), "ERC777: amount is not a multiple of granularity");
 
         _callTokensToSend(msg.sender, from, address(0), amount, userData, operatorData);
 
@@ -399,6 +473,7 @@ contract ERC777 is ERC777Token {
         _callTokensReceived(msg.sender, from, address(0), amount, userData, operatorData, requireReceptionAck);
 
         emit Burned(msg.sender, from, amount, userData, operatorData);
+        emit Transfer(from, address(0), amount);
     }
 
     /// @dev Sets the `defaultOperators` for the token. See {ERC777Token-defaultOperators}.

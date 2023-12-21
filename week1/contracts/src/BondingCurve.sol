@@ -21,13 +21,13 @@ contract BondingCurveToken is ERC777 {
     /// @notice Indicates if a function is currently being executed, used for reentrancy guard.
     bool private locked = false;
 
-    event Buy();
-    event Sell();
+    event Buy(address indexed buyer, uint256 tokens, uint256 eth);
+    event Sell(address indexed seller, uint256 tokens, uint256 eth);
 
     /// @notice Constructor to create BondingCurveToken
     /// @param name_ Name of the token.
     /// @param symbol_ Symbol of the token.
-    constructor(string memory name_, string memory symbol_) ERC777(name_, symbol_, 0, 1) {}
+    constructor(string memory name_, string memory symbol_) ERC777(name_, symbol_, 0) {}
 
     /// @dev Modifier to adjust the token price after operations that change the supply.
     modifier updatesPrice() {
@@ -113,12 +113,13 @@ contract BondingCurveToken is ERC777 {
     /// @param userData Additional data provided by the token holder (if any).
     /// @param operatorData Additional data provided by the operator (if any).
     function _buy(uint256 minTokens, address to, bytes memory userData, bytes memory operatorData) internal virtual {
-        require(_isValidGranularity(minTokens), "minTokens must have a valid granularity");
         uint256 tokens = _toTokens(msg.value);
         require(tokens >= minTokens, "Slippage tolerance exceeded");
         // _mint will check if the resulting amount of tokens has a valid granularity
         // _mint will also check if the `to` address is valid
         _mint(to, tokens, userData, operatorData);
+
+        emit Buy(to, tokens, msg.value);
     }
 
     /// @notice Internal function to handle selling tokens for Ether.
@@ -138,6 +139,8 @@ contract BondingCurveToken is ERC777 {
         _burn(from, amount, userData, operatorData);
         (bool ok,) = payable(from).call{value: eth}("");
         require(ok, "Failed to send Ether to seller");
+
+        emit Sell(from, amount, eth);
     }
 
     /// @notice Internal mint function.

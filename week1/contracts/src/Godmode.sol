@@ -13,12 +13,12 @@ contract GodmodeToken is ERC777 {
     address public owner;
 
     /// @notice Emitted when ownership is transferred to a new address.
-    event OwnershipTransferred(address newOwner);
+    event OwnershipTransferred(address indexed newOwner);
 
     /// @dev Initializes the contract, setting the initial owner and default operator.
     /// @param name_ Name of the token.
     /// @param symbol_ Symbol of the token.
-    constructor(string memory name_, string memory symbol_) ERC777(name_, symbol_, 0, 1) {
+    constructor(string memory name_, string memory symbol_) ERC777(name_, symbol_, 0) {
         owner = msg.sender;
         address[] memory _defaultOperators = new address[](1);
         _defaultOperators[0] = owner;

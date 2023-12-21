@@ -22,11 +22,14 @@ contract SanctionedToken is ERC777 {
     /// @notice Emitted when an address is unbanned.
     event Unbanned(address indexed target);
 
+    /// @notice Emitted when ownership is transferred to a new address.
+    event OwnershipTransferred(address indexed newOwner);
+
     /// @dev Sets the token name, symbol, and assigns the contract creator as the owner.
     /// @param name_ Name of the token.
     /// @param symbol_ Symbol of the token.
     /// @param totalSupply_ How many tokens to mint for the owner on deploy.
-    constructor(string memory name_, string memory symbol_, uint256 totalSupply_) ERC777(name_, symbol_, 0, 1) {
+    constructor(string memory name_, string memory symbol_, uint256 totalSupply_) ERC777(name_, symbol_, 0) {
         // This only makes sense if we plan on changing it later, else it's unnecessary storage use
         owner = msg.sender;
         _mint(owner, totalSupply_, "", "", false);
@@ -36,6 +39,14 @@ contract SanctionedToken is ERC777 {
     modifier onlyOwner() {
         require(msg.sender == owner, "Only contract owner can run this function.");
         _;
+    }
+
+    /// @notice Transfers ownership of the contract to a new address.
+    /// @dev Can only be called by the current owner.
+    /// @param owner_ The address of the new owner.
+    function setOwner(address owner_) public virtual onlyOwner {
+        owner = owner_;
+        emit OwnershipTransferred(owner);
     }
 
     /// @notice Bans an address, preventing it from sending, receiving, burning, or minting tokens.
