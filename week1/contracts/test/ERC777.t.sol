@@ -6,9 +6,7 @@ import {ERC777} from "../src/lib/ERC777.sol";
 
 /// Wrapper to test `_mint`
 contract TestableERC777 is ERC777 {
-    constructor(string memory name_, string memory symbol_, uint256 totalSupply_, uint256 granularity_)
-        ERC777(name_, symbol_, 0, granularity_)
-    {
+    constructor(string memory name_, string memory symbol_, uint256 totalSupply_) ERC777(name_, symbol_, 0) {
         _mint(msg.sender, totalSupply_, "", "", false);
     }
 
@@ -35,7 +33,7 @@ contract ERC777Test is Test {
         bob = address(0x2);
 
         // Deploy the ERC777 token
-        token = new TestableERC777("TestToken", "TTK", 1000, 2);
+        token = new TestableERC777("TestToken", "TTK", 1000);
     }
 
     function testInitialBalance() public {
@@ -56,11 +54,6 @@ contract ERC777Test is Test {
     function testBurn() public {
         token.burn(300, "");
         assertEq(token.balanceOf(address(this)), 700);
-    }
-
-    function testRevertOnInvalidGranularity() public {
-        vm.expectRevert("ERC777: Amount is not a multiple of granularity");
-        token.send(bob, 101, "");
     }
 
     function testAuthorizeAndRevokeOperator() public {
