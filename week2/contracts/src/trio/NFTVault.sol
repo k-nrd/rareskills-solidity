@@ -11,8 +11,8 @@ contract NFTVault is IERC721Receiver {
 
     uint8 private immutable REWARDS_PER_ASSET_PER_DAY = 10;
 
-    uint256 private _accRewardsPerAsset = 0;
-    uint256 private _lastUpdateTimestamp = 0;
+    uint256 private _accRewardsPerAsset;
+    uint256 private _lastUpdateTimestamp;
 
     mapping(address => mapping(address => bool)) private _allowedOperators;
     mapping(address => mapping(uint256 => bool)) private _usersAssets;
@@ -34,6 +34,8 @@ contract NFTVault is IERC721Receiver {
     constructor(ERC20Private rewardContract_, IERC721 assetContract_) {
         assetContract = assetContract_;
         rewardContract = rewardContract_;
+        _accRewardsPerAsset = 0;
+        _lastUpdateTimestamp = block.timestamp;
     }
 
     modifier updates() {
@@ -58,10 +60,12 @@ contract NFTVault is IERC721Receiver {
         _allowedOperators[msg.sender][operator] = true;
     }
 
+    function isOperator(address account) public view returns (bool) {
+        return account == msg.sender || _allowedOperators[account][msg.sender];
+    }
+
     function deposit(address account, uint256 tokenId) external {
-        require(
-            account == msg.sender || _allowedOperators[account][msg.sender], "Caller is not an operator for account."
-        );
+        require(isOperator(account), "Caller is not an operator for account.");
 
         _deposit(account, tokenId);
 
@@ -69,11 +73,8 @@ contract NFTVault is IERC721Receiver {
     }
 
     function withdraw(address account, uint256 tokenId) external {
-        require(
-            account == msg.sender || _allowedOperators[account][msg.sender], "Caller is not an operator for account."
-        );
-        require(_usersAssets[account][tokenId], "Account is not the asset owner");
-        require(_usersBalances[account].assetAmount > 0, "User has to have at staked least one asset");
+        require(isOperator(account), "Caller is not an operator for account.");
+        require(_usersAssets[account][tokenId], "Account is not the asset owner.");
 
         _withdraw(account, tokenId);
 
@@ -81,9 +82,7 @@ contract NFTVault is IERC721Receiver {
     }
 
     function harvest(address account) public {
-        require(
-            account == msg.sender || _allowedOperators[account][msg.sender], "Caller is not an operator for account."
-        );
+        require(isOperator(account), "Caller is not an operator for account.");
         _harvest(account);
     }
 
