@@ -3,12 +3,11 @@ pragma solidity 0.8.23;
 
 import {ERC721} from "openzeppelin/token/ERC721/ERC721.sol";
 import {ERC2981} from "openzeppelin/token/common/ERC2981.sol";
-import {Ownable2Step} from "openzeppelin/access/Ownable2Step.sol";
 import {ReentrancyGuard} from "openzeppelin/utils/ReentrancyGuard.sol";
 import {MerkleProof} from "openzeppelin/utils/cryptography/MerkleProof.sol";
 import {BitMaps} from "openzeppelin/utils/structs/BitMaps.sol";
 
-contract CryptoHipposNFT is ERC721, ERC2981, ReentrancyGuard, Ownable2Step {
+contract NFT is ERC721, ERC2981, ReentrancyGuard {
     using BitMaps for *;
     using MerkleProof for *;
 
@@ -22,10 +21,6 @@ contract CryptoHipposNFT is ERC721, ERC2981, ReentrancyGuard, Ownable2Step {
 
     constructor() ERC721("CryptoHippos", "CHPN") {
         _setDefaultRoyalty(address(this), 50);
-    }
-
-    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC721, ERC2981) returns (bool) {
-        return super.supportsInterface(interfaceId);
     }
 
     function _mintToken(address to) private {
@@ -53,5 +48,9 @@ contract CryptoHipposNFT is ERC721, ERC2981, ReentrancyGuard, Ownable2Step {
         BitMaps.set(claimedDiscounts, discountIndex);
         _mintToken(to);
         emit DiscountClaimed(to, discountIndex);
+    }
+
+    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC721, ERC2981) returns (bool) {
+        return super.supportsInterface(interfaceId);
     }
 }
