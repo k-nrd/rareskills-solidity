@@ -103,6 +103,7 @@ contract NFTVault is IERC721Receiver {
 
     function _withdraw(address account, uint256 tokenId) internal {
         _harvest(account);
+        assetContract.safeTransferFrom(address(this), account, tokenId);
         _usersAssets[account][tokenId] = false;
         _usersBalances[account].assetAmount -= 1;
     }
