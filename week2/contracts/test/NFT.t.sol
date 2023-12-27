@@ -10,11 +10,8 @@ contract NFTTest is Test {
 
     // Example Merkle proof and root, replace with actual values
     address[2] whitelist = [0x0000000000000000000000000000000000000001, 0x0000000000000000000000000000000000000002];
-    uint256[2] proofs = [
-        0x6e9d5a5fa819101f78484ebf901fa5f934804919ec49851f0c344e7b9636738a,
-        0xe99467d027c1d99b544d929e378c5ecfc6b0e521f7cc79d93719111138a166eb
-    ];
-    bytes32 exampleRoot = 0x4ed4471cd8f7a44e083f002092f17334fc1ca52eff3c1b40ff0552ebafa3305b;
+    bytes32[2] proofs;
+    bytes32 exampleRoot = 0xd05ebe621c58b8d21cff161492a4e299afdc33a69ff95669fa509b6acabdb28a;
 
     function setUp() public {
         owner = address(3);
@@ -22,6 +19,8 @@ contract NFTTest is Test {
         vm.deal(whitelist[1], 0.47 ether);
         vm.prank(owner);
         nft = new NFT();
+        proofs[0] = bytes32(0x9feccf6caa602894c8105bdda7f81b2a7bb7de7dba1f18af92d8d057b708cb41);
+        proofs[1] = bytes32(0x3f9553dc324cd1fd24b54243720c42e18e5c20165bc5e523e42b440a8654abd1);
     }
 
     function testMintWhenSupplyNotMaxxedOut() public {
@@ -51,7 +50,7 @@ contract NFTTest is Test {
     function testMintWithDiscount() public {
         uint256 index = 1;
         vm.prank(whitelist[index]);
-        bytes32[] memory proof;
+        bytes32[] memory proof = new bytes32[](1);
         proof[0] = bytes32(proofs[index]);
         nft.mintWithDiscount{value: 0.45 ether}(whitelist[index], index, proof);
         assertEq(nft.ownerOf(0), whitelist[index]);
@@ -67,7 +66,7 @@ contract NFTTest is Test {
 
     function testFailMintWithFakeProof() public {
         uint256 index = 0;
-        bytes32[] memory fakeProof;
+        bytes32[] memory fakeProof = new bytes32[](1);
         fakeProof[0] = bytes32(0x0);
         vm.prank(whitelist[index]);
         nft.mintWithDiscount{value: 0.45 ether}(whitelist[index], index, fakeProof); // This should fail
@@ -76,12 +75,10 @@ contract NFTTest is Test {
     function testFailMintWithClaimedProof() public {
         uint256 index = 1;
         vm.prank(whitelist[index]);
-        bytes32[] memory proof;
+        bytes32[] memory proof = new bytes32[](1);
         proof[0] = bytes32(proofs[index]);
         nft.mintWithDiscount{value: 0.45 ether}(whitelist[index], index, proof);
         vm.prank(whitelist[index]);
         nft.mintWithDiscount{value: 0.45 ether}(whitelist[index], index, proof); // This should fail
     }
-
-    receive() external payable {}
 }

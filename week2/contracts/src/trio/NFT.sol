@@ -17,7 +17,7 @@ contract NFT is ERC721, ERC2981, ReentrancyGuard, Ownable2Step {
     using MerkleProof for *;
 
     /// @notice The Merkle root for verifying discount eligibility.
-    bytes32 public constant MERKLE_ROOT = "yolo";
+    bytes32 public constant MERKLE_ROOT = 0xd05ebe621c58b8d21cff161492a4e299afdc33a69ff95669fa509b6acabdb28a;
 
     /// @notice The maximum supply of NFTs.
     uint256 public constant MAX_SUPPLY = 1000;
@@ -57,7 +57,10 @@ contract NFT is ERC721, ERC2981, ReentrancyGuard, Ownable2Step {
     /// @param merkleProof An array of bytes32 hashes representing the Merkle path to prove discount eligibility.
     function mintWithDiscount(address to, uint256 index, bytes32[] memory merkleProof) external payable nonReentrant {
         require(!BitMaps.get(claimedDiscounts, index), "Discount was already claimed!");
-        require(MerkleProof.verify(merkleProof, MERKLE_ROOT, keccak256(abi.encodePacked(index, to))), "Invalid proof.");
+        require(
+            MerkleProof.verify(merkleProof, MERKLE_ROOT, keccak256(bytes.concat(keccak256(abi.encode(to, index))))),
+            "Invalid proof."
+        );
         _mintToken(to, 0.45 ether);
         BitMaps.set(claimedDiscounts, index);
         emit DiscountClaimed(to, index);
