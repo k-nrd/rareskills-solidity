@@ -10,7 +10,7 @@ import {Ownable} from "openzeppelin/access/Ownable.sol";
 import {Ownable2Step} from "openzeppelin/access/Ownable2Step.sol";
 
 /// @title NFT Contract with ERC2981 Royalty and Merkle Tree Based Discounts
-/// @author Gustasvo Konrad
+/// @author Gustavo Konrad
 /// @notice This contract allows minting of ERC721 tokens with a limited supply, and includes support for ERC2981 royalty.
 contract NFT is ERC721, ERC2981, ReentrancyGuard, Ownable2Step {
     using BitMaps for *;

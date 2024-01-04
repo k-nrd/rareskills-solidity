@@ -3,10 +3,11 @@ pragma solidity 0.8.23;
 
 import {IERC721} from "openzeppelin/token/ERC721/IERC721.sol";
 import {IERC721Receiver} from "openzeppelin/token/ERC721/IERC721Receiver.sol";
+import {ReentrancyGuard} from "openzeppelin/utils/ReentrancyGuard.sol";
 import {Math} from "openzeppelin/utils/math/Math.sol";
 import {ERC20Private} from "../lib/ERC20Private.sol";
 
-contract NFTVault is IERC721Receiver {
+contract NFTVault is IERC721Receiver, ReentrancyGuard {
     using Math for *;
 
     uint8 private immutable REWARDS_PER_ASSET_PER_DAY = 10;
@@ -64,7 +65,7 @@ contract NFTVault is IERC721Receiver {
         return account == msg.sender || _allowedOperators[account][msg.sender];
     }
 
-    function deposit(address account, uint256 tokenId) external {
+    function deposit(address account, uint256 tokenId) external nonReentrant {
         require(isOperator(account), "Caller is not an operator for account.");
 
         _deposit(account, tokenId);
@@ -72,7 +73,7 @@ contract NFTVault is IERC721Receiver {
         emit Deposit(account, tokenId);
     }
 
-    function withdraw(address account, uint256 tokenId) external {
+    function withdraw(address account, uint256 tokenId) external nonReentrant {
         require(isOperator(account), "Caller is not an operator for account.");
         require(_usersAssets[account][tokenId], "Account is not the asset owner.");
 
@@ -95,26 +96,24 @@ contract NFTVault is IERC721Receiver {
     }
 
     function _deposit(address account, uint256 tokenId) internal updates {
-        assetContract.safeTransferFrom(account, address(this), tokenId);
         _usersAssets[account][tokenId] = true;
         _usersBalances[account].rewardDebt += _accRewardsPerAsset;
         _usersBalances[account].assetAmount += 1;
+        assetContract.safeTransferFrom(account, address(this), tokenId);
     }
 
     function _withdraw(address account, uint256 tokenId) internal {
         _harvest(account);
-        assetContract.safeTransferFrom(address(this), account, tokenId);
         _usersAssets[account][tokenId] = false;
         _usersBalances[account].assetAmount -= 1;
+        assetContract.safeTransferFrom(address(this), account, tokenId);
     }
 
     function _harvest(address account) internal updates {
         uint256 userRewards = _calculateRewards(account);
         require(userRewards > 0, "User can't harvest yet.");
-
-        rewardContract.mint(account, userRewards);
         _usersBalances[account].rewardDebt += userRewards;
-
+        rewardContract.mint(account, userRewards * (10 ** rewardContract.decimals()));
         emit Harvest(account, userRewards);
     }
 
@@ -124,16 +123,20 @@ contract NFTVault is IERC721Receiver {
     }
 
     function _update() internal returns (bool) {
-        uint256 daysSinceUpdate = (block.timestamp - _lastUpdateTimestamp) / 60 * 60 * 24;
-        if (daysSinceUpdate < 1) {
+        // Do not update unless 1 or more days have passed
+        uint256 currentTime = block.timestamp;
+        uint256 timeElapsed = currentTime - _lastUpdateTimestamp;
+        if (timeElapsed < 1 days) {
             return false;
         }
 
-        _accRewardsPerAsset += daysSinceUpdate * REWARDS_PER_ASSET_PER_DAY;
-        _lastUpdateTimestamp = block.timestamp;
+        // Calculate how much an asset would have accrued in the period
+        _accRewardsPerAsset += (timeElapsed * REWARDS_PER_ASSET_PER_DAY) / 1 days;
+
+        // Set the new last update timestamp
+        _lastUpdateTimestamp = currentTime;
 
         emit Update(_lastUpdateTimestamp, _accRewardsPerAsset);
-
         return true;
     }
 }
