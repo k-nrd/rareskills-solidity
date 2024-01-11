@@ -80,10 +80,7 @@ contract NFT is ERC721, ERC2981, ReentrancyGuard, Ownable2Step {
     function _mintToken(address to, uint256 price) internal {
         require(msg.value >= price, "Value insufficient for minting.");
         require(tokenId < MAX_SUPPLY, "Max supply reached.");
-        _safeMint(to, tokenId);
         tokenId++;
+        _safeMint(to, tokenId);
     }
-
-    receive() external payable {}
-    fallback() external payable {}
 }

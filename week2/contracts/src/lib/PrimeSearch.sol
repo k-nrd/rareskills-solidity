@@ -1,35 +1,19 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.23;
+pragma solidity >=0.8.0;
 
-import {Math} from "openzeppelin/utils/math/Math.sol";
-import {ERC721Enumerable} from "openzeppelin/token/ERC721/extensions/ERC721Enumerable.sol";
-
-contract PrimeSearch {
-    using Math for *;
-
-    ERC721Enumerable private _enumerableNft;
-
-    mapping(uint256 => bool) private _primeBasis;
-
-    constructor(ERC721Enumerable enumerableNft) {
-        _enumerableNft = enumerableNft;
-    }
-
-    function getPrimeNFTCount(address holder) public view returns (uint256) {
-        uint256 tokenCount = _enumerableNft.balanceOf(holder);
-        uint256 primeCount = 0;
-        for (uint256 index = 0; index < tokenCount; index++) {
-            uint256 tokenId = _enumerableNft.tokenOfOwnerByIndex(holder, index);
-            if (_isPrime(tokenId)) {
-                primeCount++;
-            }
-        }
-        return primeCount;
-    }
-
-    function _isPrime(uint256 number) internal pure returns (bool) {
+/// @title PrimeSearch Library
+/// @notice Provides utility functions for prime number identification.
+/// @dev Implements an optimized algorithm for checking if a given number is prime.
+library PrimeSearch {
+    /// @notice Determines if a given number is a prime number.
+    /// @dev Utilizes a combination of simple checks and an optimized version of the wheel factorization technique to determine primality.
+    ///      The function handles small numbers as special cases and uses bitwise operations for efficiency.
+    /// @param number The number to check for primality.
+    /// @return True if the number is prime, false otherwise.
+    function isPrime(uint256 number) internal pure returns (bool) {
         if (number < 2) return false;
-        if (number < 4) return true; // 2 and 3 are prime
+        // 2 and 3 are prime
+        if (number < 4) return true;
         // Check if number is divisible by one of our basis elements
         if ((number & 1) == 0 || number % 3 == 0 || number % 5 == 0) return false;
 

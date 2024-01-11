@@ -5,12 +5,14 @@ import {IERC721} from "openzeppelin/token/ERC721/IERC721.sol";
 import {IERC721Receiver} from "openzeppelin/token/ERC721/IERC721Receiver.sol";
 import {ReentrancyGuard} from "openzeppelin/utils/ReentrancyGuard.sol";
 import {Math} from "openzeppelin/utils/math/Math.sol";
+import {Ownable} from "openzeppelin/access/Ownable.sol";
+import {Ownable2Step} from "openzeppelin/access/Ownable2Step.sol";
 import {ERC20Private} from "../lib/ERC20Private.sol";
 
 /// @title NFT Vault
 /// @notice This contract enables users to stake NFTs and earn ERC20 rewards.
 /// @dev Implements a mechanism for staking ERC721 NFTs and distributing ERC20 rewards for staked NFTs.
-contract NFTVault is IERC721Receiver, ReentrancyGuard {
+contract NFTVault is IERC721Receiver, ReentrancyGuard, Ownable2Step {
     using Math for *;
 
     /// @notice Rewards allocated per asset per day.
@@ -55,15 +57,16 @@ contract NFTVault is IERC721Receiver, ReentrancyGuard {
         uint256 assetAmount;
     }
 
-    /// @notice Initializes the NFT Vault with a specified reward and asset contract.
-    /// @dev This contract needs to own the `rewardContract_`.
-    /// @param rewardContract_ The ERC20Private contract for reward tokens.
+    /// @notice Initializes the NFT Vault with a specified asset contract.
     /// @param assetContract_ The ERC721 contract for NFT assets.
-    constructor(ERC20Private rewardContract_, IERC721 assetContract_) {
+    constructor(IERC721 assetContract_) Ownable(msg.sender) {
         assetContract = assetContract_;
-        rewardContract = rewardContract_;
         _accRewardsPerAsset = 0;
         _lastUpdateTimestamp = block.timestamp;
+    }
+
+    function setRewardContract(ERC20Private rewardContract_) public onlyOwner {
+        rewardContract = rewardContract_;
     }
 
     /// @dev Modifier to update the accumulated rewards before executing a function.
