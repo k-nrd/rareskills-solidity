@@ -27,7 +27,7 @@ contract NFTTest is Test {
         uint256 index = 0;
         vm.prank(whitelist[index]);
         nft.mint{value: 0.5 ether}(whitelist[index]);
-        assertEq(nft.ownerOf(0), whitelist[index]);
+        assertEq(nft.ownerOf(1), whitelist[index]);
     }
 
     function testFailMintWhenSupplyMaxxedOut() public {
@@ -44,7 +44,7 @@ contract NFTTest is Test {
         uint256 index = 0;
         vm.prank(whitelist[index]);
         nft.mint{value: 0.5 ether}(whitelist[index]);
-        assertEq(nft.ownerOf(0), whitelist[index]);
+        assertEq(nft.ownerOf(1), whitelist[index]);
     }
 
     function testMintWithDiscount() public {
@@ -53,7 +53,7 @@ contract NFTTest is Test {
         bytes32[] memory proof = new bytes32[](1);
         proof[0] = bytes32(proofs[index]);
         nft.mintWithDiscount{value: 0.45 ether}(whitelist[index], index, proof);
-        assertEq(nft.ownerOf(0), whitelist[index]);
+        assertEq(nft.ownerOf(1), whitelist[index]);
     }
 
     function testRoyalties() public {

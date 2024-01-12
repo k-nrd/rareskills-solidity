@@ -45,9 +45,6 @@ contract NFTVault is IERC721Receiver, ReentrancyGuard, Ownable2Step {
     /// @notice Emitted when a user withdraws an NFT.
     event Withdraw(address account, uint256 tokenId);
 
-    /// @notice Emitted when a user harvests rewards.
-    event Harvest(address account, uint256 rewards);
-
     /// @notice Emitted when rewards are updated.
     event Update(uint256 timestamp, uint256 accRewardsPerAsset);
 
@@ -131,6 +128,7 @@ contract NFTVault is IERC721Receiver, ReentrancyGuard, Ownable2Step {
     /// @param account The account to harvest rewards for.
     function harvest(address account) public {
         require(isOperator(account), "Caller is not an operator for account.");
+
         _harvest(account);
     }
 
@@ -138,7 +136,7 @@ contract NFTVault is IERC721Receiver, ReentrancyGuard, Ownable2Step {
     /// @param account The account to estimate rewards for.
     /// @return The amount of rewards that can be harvested.
     function previewHarvest(address account) public view returns (uint256) {
-        return _calculateRewards(account);
+        return _previewHarvest(account);
     }
 
     /// @dev Required implementation of the ERC721Receiver interface.
@@ -156,52 +154,66 @@ contract NFTVault is IERC721Receiver, ReentrancyGuard, Ownable2Step {
         assetContract.safeTransferFrom(account, address(this), tokenId);
     }
 
-    /// @dev Withdraws an NFT from the vault, updating the user's balance and harvesting rewards.
+    /// @dev Withdraws an NFT from the vault, updating the user's balance and harvesting rewards, if any.
     /// @param account The address of the account withdrawing the NFT.
     /// @param tokenId The ID of the NFT to withdraw.
-    function _withdraw(address account, uint256 tokenId) internal {
-        _harvest(account);
+    function _withdraw(address account, uint256 tokenId) internal updates {
+        uint256 rewards = _calculateRewards(account, _accRewardsPerAsset);
+        if (rewards > 0) {
+            _reward(account, rewards);
+        }
         _usersAssets[account][tokenId] = false;
         _usersBalances[account].assetAmount -= 1;
         assetContract.safeTransferFrom(address(this), account, tokenId);
     }
 
-    /// @dev Calculates and mints rewards for the specified account.
+    /// @dev Calculates and mints rewards for the specified account. Reverts if no rewards are available.
     /// @param account The address of the account to harvest rewards for.
     function _harvest(address account) internal updates {
-        uint256 userRewards = _calculateRewards(account);
-        require(userRewards > 0, "User can't harvest yet.");
-        _usersBalances[account].rewardDebt += userRewards;
-        rewardContract.mint(account, userRewards * (10 ** rewardContract.decimals()));
-        emit Harvest(account, userRewards);
+        uint256 rewards = _calculateRewards(account, _accRewardsPerAsset);
+        require(rewards > 0, "User can't harvest yet.");
+        _reward(account, rewards);
+    }
+
+    function _previewHarvest(address account) internal view returns (uint256) {
+        // Simulate new accumulator
+        uint256 fakeAcc = _accRewardsPerAsset;
+        fakeAcc += ((block.timestamp - _lastUpdateTimestamp) * REWARDS_PER_ASSET_PER_DAY) / 1 days;
+        return _calculateRewards(account, fakeAcc) * (10 ** rewardContract.decimals());
+    }
+
+    /// @dev Mints rewards for the specified account.
+    /// @param account The address of the account to harvest rewards for.
+    /// @param rewards The amount of rewards to be minted.
+    function _reward(address account, uint256 rewards) internal {
+        _usersBalances[account].rewardDebt += rewards;
+        rewardContract.mint(account, rewards * (10 ** rewardContract.decimals()));
     }
 
     /// @dev Calculates the rewards owed to a specific account.
     /// @param account The address of the account to calculate rewards for.
+    /// @param accumulator The accumulator to use when calculating rewards.
     /// @return The amount of rewards owed to the account.
-    function _calculateRewards(address account) internal view returns (uint256) {
+    function _calculateRewards(address account, uint256 accumulator) internal view returns (uint256) {
         UserBalance memory userBalance = _usersBalances[account];
-        return (_accRewardsPerAsset * userBalance.assetAmount) - userBalance.rewardDebt;
+        return (accumulator * userBalance.assetAmount) - userBalance.rewardDebt;
     }
 
     /// @dev Internal function to update the accumulated rewards per asset.
-    /// @return True if the update was performed, false otherwise.
     /// @notice This function updates the accumulated rewards per asset based on the elapsed time.
-    function _update() internal returns (bool) {
-        // Do not update unless 1 or more days have passed
-        uint256 currentTime = block.timestamp;
-        uint256 timeElapsed = currentTime - _lastUpdateTimestamp;
-        if (timeElapsed < 1 days) {
-            return false;
+    function _update() internal {
+        // Do not update unless we're in a new block
+        if (block.timestamp == _lastUpdateTimestamp) {
+            return;
         }
 
         // Calculate how much an asset would have accrued in the period
-        _accRewardsPerAsset += (timeElapsed * REWARDS_PER_ASSET_PER_DAY) / 1 days;
+        // and update our accumulator
+        _accRewardsPerAsset += ((block.timestamp - _lastUpdateTimestamp) * REWARDS_PER_ASSET_PER_DAY) / 1 days;
 
         // Set the new last update timestamp
-        _lastUpdateTimestamp = currentTime;
+        _lastUpdateTimestamp = block.timestamp;
 
         emit Update(_lastUpdateTimestamp, _accRewardsPerAsset);
-        return true;
     }
 }
