@@ -8,6 +8,7 @@ remappings = [
   "ds-test/=lib/forge-std/lib/ds-test/src/",
   "forge-std/=lib/forge-std/src/",
   "openzeppelin/=lib/openzeppelin-contracts/contracts/",
+  "solady/=lib/solady/src",
 ]
 auto_detect_remappings = true
 libraries = []
@@ -62,7 +63,7 @@ chains = "all"
 endpoints = "all"
 
 [fmt]
-line_length = 120
+line_length = 80
 tab_width = 4
 bracket_spacing = false
 int_types = "long"

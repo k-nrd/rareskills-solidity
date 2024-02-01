@@ -19,9 +19,6 @@
 	path = week3/contracts/lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
 
-[submodule "week3/contracts/lib/openzeppelin-contracts"]
-	path = week3/contracts/lib/openzeppelin-contracts
-	url = https://github.com/OpenZeppelin/openzeppelin-contracts
 [submodule "week3/contracts/lib/solady"]
 	path = week3/contracts/lib/solady
 	url = https://github.com/vectorized/solady
