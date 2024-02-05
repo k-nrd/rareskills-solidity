@@ -28,7 +28,7 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
     uint224 private constant Q112 = 2 ** 112;
 
     /// @notice Minimum shares constant to prevent attacks on initial liquidity add
-    uint32 private constant MINIMUM_SHARES = 10 ** 3;
+    uint32 private constant MINIMUM_SHARES = 1e3;
 
     /// @notice Flash loan success return value
     bytes32 public constant FLASH_LOAN_SUCCESS =
@@ -143,6 +143,16 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         uint256 amount1,
         uint256 minSharesExpected
     ) external nonReentrant {
+        // Either msg.sender is the owner or they have allowance on tokens
+        require(
+            msg.sender == from
+                || (
+                    IERC20(token0).allowance(from, msg.sender) >= amount0
+                        && IERC20(token1).allowance(from, msg.sender) >= amount1
+                ),
+            "PAIR: INSUFFICIENT_ALLOWANCE"
+        );
+
         // Gas savings
         address pair = address(this);
         uint256 totalShares = totalSupply();
@@ -156,25 +166,27 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
             _mint(address(0), MINIMUM_SHARES);
         } else {
             // Always round in favor of liquidity providers
-            shares = FixedPointMathLib.min(
-                amount0.fullMulDiv(totalShares, _reserves0),
+            shares = amount0.fullMulDiv(totalShares, _reserves0).min(
                 amount1.fullMulDiv(totalShares, _reserves1)
             );
         }
         require(shares >= minSharesExpected, "PAIR: DEPOSIT_SLIPPAGE_EXCEEDED");
 
         _mint(from, shares);
-        _update();
 
         emit Deposit(from, msg.sender, amount0, amount1, shares);
 
         // Don't execute 2 transfers if we only need 1
         if (amount0 > 0) {
-            SafeTransferLib.safeTransferFrom(token0, from, pair, amount0);
+            IERC20(token0).transferFrom(from, pair, amount0);
+            // SafeTransferLib.safeTransferFrom(token0, from, pair, amount0);
         }
         if (amount1 > 0) {
-            SafeTransferLib.safeTransferFrom(token1, from, pair, amount1);
+            IERC20(token1).transferFrom(from, pair, amount1);
+            // SafeTransferLib.safeTransferFrom(token1, from, pair, amount1);
         }
+
+        _update();
     }
 
     /// @notice Withdraws amount from the pool by burning liquidity shares
@@ -189,6 +201,12 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         uint256 minAmount0Expected,
         uint256 minAmount1Expected
     ) external nonReentrant {
+        // Either msg.sender is the owner or they have allowance on shares
+        require(
+            msg.sender == to || allowance(to, msg.sender) >= shares,
+            "PAIR: INSUFFICIENT_ALLOWANCE"
+        );
+
         // Gas savings
         address pair = address(this);
         uint256 totalShares = totalSupply();
@@ -206,17 +224,20 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         );
 
         _burn(to, shares);
-        _update();
 
         emit Withdraw(to, msg.sender, amount0, amount1, shares);
 
         // Don't execute 2 transfers if we only need 1
         if (amount0 > 0) {
-            SafeTransferLib.safeTransferFrom(token0, pair, to, amount0);
+            IERC20(token0).transfer(to, amount0);
+            // SafeTransferLib.safeTransfer(token0, to, amount0);
         }
         if (amount1 > 0) {
-            SafeTransferLib.safeTransferFrom(token1, pair, to, amount1);
+            IERC20(token1).transfer(to, amount1);
+            // SafeTransferLib.safeTransfer(token1, to, amount1);
         }
+
+        _update();
     }
 
     /// @notice Swaps an amount of one token for an amount of the other token
@@ -231,28 +252,48 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         uint256 inputAmount,
         uint256 minAmountExpected
     ) external nonReentrant {
-        address pair = address(this);
-        (address input, address output, uint256 outputBalance) = zeroForOne
-            ? (token0, token1, _reserves1)
-            : (token1, token0, _reserves0);
-        uint256 inputPrice = _price(zeroForOne, _reserves0, _reserves1);
         require(inputAmount > 0, "PAIR: NO_INPUT_AMOUNT");
 
-        uint256 grossOutputAmount = inputAmount * inputPrice;
+        // Gas savings
+        (
+            address input,
+            address output,
+            uint256 inputBalance,
+            uint256 outputBalance
+        ) = zeroForOne
+            ? (token0, token1, _reserves0, _reserves1)
+            : (token1, token0, _reserves1, _reserves0);
+        // Either msg.sender is the owner or they have allowance on input tokens
+        require(
+            msg.sender == swapper
+                || IERC20(input).allowance(swapper, msg.sender) >= inputAmount,
+            "PAIR: INSUFFICIENT_ALLOWANCE"
+        );
+
+        // We need non-zero input reserves to calculate the price
+        require(inputBalance > 0, "PAIR: NO_INPUT_RESERVES");
+        uint256 inputPrice = _price(zeroForOne, _reserves0, _reserves1);
+
         // Always round in favor of liquidity providers
+        uint256 grossOutputAmount = inputAmount.fullMulDiv(inputPrice, Q112);
         uint256 netOutputAmount = grossOutputAmount
-            - grossOutputAmount.fullMulDivUp(swapFeeBasisPoints, 10000);
+            - grossOutputAmount.fullMulDivUp(swapFeeBasisPoints, 1e4);
+
         require(outputBalance > netOutputAmount, "PAIR: INSUFFICIENT_RESERVES");
         require(
             netOutputAmount >= minAmountExpected, "PAIR: SWAP_SLIPPAGE_EXCEEDED"
         );
 
-        _update();
-
         emit Swap(swapper, msg.sender, inputAmount, netOutputAmount);
 
+        // Gas savings
+        address pair = address(this);
+        // IERC20(input).transferFrom(swapper, pair, inputAmount);
+        // IERC20(output).transfer(swapper, netOutputAmount);
         SafeTransferLib.safeTransferFrom(input, swapper, pair, inputAmount);
-        SafeTransferLib.safeTransferFrom(output, pair, swapper, netOutputAmount);
+        SafeTransferLib.safeTransfer(output, swapper, netOutputAmount);
+
+        _update();
     }
 
     /// @notice Provides the maximum flash loan amount for a specific token
@@ -300,7 +341,8 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         require(reserves > amount, "PAIR: INSUFFICIENT_RESERVES");
 
         address pair = address(this);
-        SafeTransferLib.safeTransferFrom(token, pair, address(receiver), amount);
+        IERC20(token).transferFrom(pair, address(receiver), amount);
+        // SafeTransferLib.safeTransferFrom(token, pair, address(receiver), amount);
 
         require(
             IERC3156FlashBorrower(receiver).onFlashLoan(
@@ -392,18 +434,15 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         pure
         returns (uint256)
     {
-        (uint224 encodedReserves0, uint224 encodedReserves1) =
-            (uint224(reserves0), uint224(reserves1));
-
+        (uint224 r0, uint224 r1) = (uint224(reserves0), uint224(reserves1));
         // reserves are at most 2^112 - 1
         // Q112 * (2^112 - 1) never overflows a uint224
         // 2^112 * (2^112 - 1) = 2^224 - 2^112
         // 2^224 - 2^112 < 2^224 - 1
         // QED
         unchecked {
-            return zeroForOne
-                ? uint256((encodedReserves1 * Q112) / encodedReserves0)
-                : uint256((encodedReserves0 * Q112) / encodedReserves1);
+            return
+                zeroForOne ? uint256(r1 * Q112 / r0) : uint256(r0 * Q112 / r1);
         }
     }
 }
