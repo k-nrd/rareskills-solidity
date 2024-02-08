@@ -34,6 +34,9 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
     bytes32 public constant FLASH_LOAN_SUCCESS =
         keccak256("ERC3156FlashBorrower.onFlashLoan");
 
+    /// @notice Address of factory contract
+    address public constant FACTORY_ADDRESS = address(0);
+
     /// @notice The name of the pair
     string private _name;
 
@@ -122,6 +125,7 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         uint128 swapFeeBasisPoints_,
         uint128 loanFeeBasisPoints_
     ) {
+        require(msg.sender == FACTORY_ADDRESS, "PAIR: INVALID_FACTORY");
         _name = name_;
         _symbol = symbol_;
 
@@ -178,12 +182,12 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
 
         // Don't execute 2 transfers if we only need 1
         if (amount0 > 0) {
-            IERC20(token0).transferFrom(from, pair, amount0);
-            // SafeTransferLib.safeTransferFrom(token0, from, pair, amount0);
+            // IERC20(token0).transferFrom(from, pair, amount0);
+            SafeTransferLib.safeTransferFrom(token0, from, pair, amount0);
         }
         if (amount1 > 0) {
-            IERC20(token1).transferFrom(from, pair, amount1);
-            // SafeTransferLib.safeTransferFrom(token1, from, pair, amount1);
+            // IERC20(token1).transferFrom(from, pair, amount1);
+            SafeTransferLib.safeTransferFrom(token1, from, pair, amount1);
         }
 
         _update();
@@ -286,36 +290,14 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
 
         emit Swap(swapper, msg.sender, inputAmount, netOutputAmount);
 
-        // Gas savings
-        address pair = address(this);
         // IERC20(input).transferFrom(swapper, pair, inputAmount);
         // IERC20(output).transfer(swapper, netOutputAmount);
-        SafeTransferLib.safeTransferFrom(input, swapper, pair, inputAmount);
+        SafeTransferLib.safeTransferFrom(
+            input, swapper, address(this), inputAmount
+        );
         SafeTransferLib.safeTransfer(output, swapper, netOutputAmount);
 
         _update();
-    }
-
-    /// @notice Provides the maximum flash loan amount for a specific token
-    /// @param token Address of the token for which the max loan amount is queried
-    /// @return The maximum amount of the token that can be loaned
-    function maxFlashLoan(address token) external view returns (uint256) {
-        if (token == token0) return _reserves0;
-        if (token == token1) return _reserves1;
-        return 0;
-    }
-
-    /// @notice Calculates the fee for a flash loan of a specific amount of a given token
-    /// @param token Address of the token for which the fee is calculated
-    /// @param amount Amount of the token to be loaned
-    /// @return The fee amount for the flash loan
-    function flashFee(address token, uint256 amount)
-        external
-        view
-        returns (uint256)
-    {
-        require(token == token0 || token == token1, "PAIR: INVALID_TOKEN");
-        return amount.fullMulDivUp(uint256(loanFeeBasisPoints), 10000);
     }
 
     /// @notice Executes a flash loan transaction
@@ -351,6 +333,7 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
             "PAIR: FLASH_LOAN_FAILED"
         );
 
+        // TODO: Fix math and allow borrower to return in both tokens
         uint256 balance = IERC20(token).balanceOf(pair);
         uint256 amountReturned =
             balance > (reserves - amount) ? balance - reserves - amount : 0;
@@ -367,6 +350,28 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         );
 
         return true;
+    }
+
+    /// @notice Provides the maximum flash loan amount for a specific token
+    /// @param token Address of the token for which the max loan amount is queried
+    /// @return The maximum amount of the token that can be loaned
+    function maxFlashLoan(address token) external view returns (uint256) {
+        if (token == token0) return _reserves0;
+        if (token == token1) return _reserves1;
+        return 0;
+    }
+
+    /// @notice Calculates the fee for a flash loan of a specific amount of a given token
+    /// @param token Address of the token for which the fee is calculated
+    /// @param amount Amount of the token to be loaned
+    /// @return The fee amount for the flash loan
+    function flashFee(address token, uint256 amount)
+        external
+        view
+        returns (uint256)
+    {
+        require(token == token0 || token == token1, "PAIR: INVALID_TOKEN");
+        return amount.fullMulDivUp(uint256(loanFeeBasisPoints), 10000);
     }
 
     /// @notice Returns the name of the token pair
@@ -405,7 +410,8 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
             uint256 price0 = _price(true, _reserves0, _reserves1);
             uint256 price1 = _price(false, _reserves0, _reserves1);
 
-            // uint224 * uint32 never overflows a uint256
+            // accumulatedPrices can overflow, and
+            // price * timeElapsed can't overflow a uint256, proof below
             // (2^224 - 1) * (2^32 - 1) = 2^256 - 2^224 - 2^32 + 1
             // 2^256 - 1 > 2^256 - 2^224 - 2^32 + 1
             // QED
@@ -424,7 +430,8 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
     }
 
     /// @notice Calculates the price of one token in terms of the other
-    /// @param zeroForOne Direction of price calculation (true for price of token0 in terms of token1, false for the reverse)
+    /// @param zeroForOne Direction of price calculation
+    ///        (true for price of token0 in terms of token1, false for the reverse)
     /// @param reserves0 Current reserve of token0
     /// @param reserves1 Current reserve of token1
     /// @return Price of one token in terms of the other
