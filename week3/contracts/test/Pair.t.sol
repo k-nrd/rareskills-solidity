@@ -143,12 +143,25 @@ contract PairTest is Test {
         uint256 token1Amount = 1e17;
         pair.deposit(bob, bob, token0Amount, token1Amount, 0);
 
+        (uint256 oldBalance0, uint256 oldBalance1) =
+            (token0.balanceOf(address(pair)), token1.balanceOf(address(pair)));
+
         // Deploy the mock flash loan receiver
         MockFlashLoanReceiverOtherToken receiver = new MockFlashLoanReceiverOtherToken(
             pair, token0, token1, token0Amount / token1Amount
         );
 
         // Trigger the flash loan, returns will be in another token
-        assertTrue(pair.flashLoan(receiver, address(token0), 9e17, ""));
+        uint256 loanAmount = 9e17;
+        assertTrue(pair.flashLoan(receiver, address(token0), loanAmount, ""));
+
+        (uint256 newBalance0, uint256 newBalance1) =
+            (token0.balanceOf(address(pair)), token1.balanceOf(address(pair)));
+
+        assertTrue(
+            newBalance0 * newBalance1
+                >= (oldBalance0 + pair.flashFee(address(token0), loanAmount))
+                    * oldBalance1
+        );
     }
 }
