@@ -409,10 +409,9 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
     /// @param token Address of the token for which the max loan amount is queried
     /// @return The maximum amount of the token that can be loaned
     function maxFlashLoan(address token) external view returns (uint256) {
-        // We allow for loans to be returned in both tokens of the pair.
-        // This means we can't let reserves go to zero on either, however.
-        if (token == TOKEN_0) return _reserves0 - 1;
-        if (token == TOKEN_1) return _reserves1 - 1;
+        // TODO: not quite correct
+        if (token == TOKEN_0) return _reserves0;
+        if (token == TOKEN_1) return _reserves1;
         return 0;
     }
 

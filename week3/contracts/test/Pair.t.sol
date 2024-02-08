@@ -131,9 +131,6 @@ contract PairTest is Test {
         // Deploy the mock flash loan receiver
         MockFlashLoanReceiver receiver = new MockFlashLoanReceiver(token0, pair);
 
-        // Mint enough tokens to the Pair contract to cover the flash loan and fee
-        token0.mint(address(pair), loanAmount * 2);
-
         // Trigger the flash loan
         assertTrue(pair.flashLoan(receiver, address(token0), loanAmount, ""));
     }
@@ -152,7 +149,7 @@ contract PairTest is Test {
         );
 
         // Trigger the flash loan, returns will be in another token
-        uint256 loanAmount = 9e17;
+        uint256 loanAmount = pair.maxFlashLoan(address(token0)) * 95 / 100;
         assertTrue(pair.flashLoan(receiver, address(token0), loanAmount, ""));
 
         (uint256 newBalance0, uint256 newBalance1) =
