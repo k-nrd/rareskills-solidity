@@ -2,10 +2,11 @@
 pragma solidity ^0.8.23;
 
 import {Test} from "forge-std/Test.sol";
+import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {Factory} from "../src/Factory.sol";
 import {Pair} from "../src/Pair.sol";
 import {MockERC20} from "./MockERC20.sol";
-import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
+import {MockFlashLoanReceiver} from "./MockFlashLoanReceiver.sol";
 
 contract PairTest is Test {
     using FixedPointMathLib for uint256;
@@ -120,5 +121,17 @@ contract PairTest is Test {
         assertEq(pairToken1Balance, token1Amount - expectedOutputAmount);
     }
 
-    // Additional helper functions and test cases will go here...
+    function testFlashLoan() public {
+        uint256 loanAmount = 1e17; // 0.1 Token
+        pair.deposit(bob, bob, loanAmount, loanAmount, 0);
+
+        // Deploy the mock flash loan receiver
+        MockFlashLoanReceiver receiver = new MockFlashLoanReceiver(token0, pair);
+
+        // Mint enough tokens to the Pair contract to cover the flash loan and fee
+        token0.mint(address(pair), loanAmount * 2);
+
+        // Trigger the flash loan
+        assertTrue(pair.flashLoan(receiver, address(token0), loanAmount, ""));
+    }
 }

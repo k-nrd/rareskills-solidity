@@ -284,12 +284,10 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
 
         // Don't execute 2 transfers if we only need 1
         if (amount0 > 0) {
-            IERC20(TOKEN_0).transfer(beneficiary, amount0);
-            // SafeTransferLib.safeTransfer(token0, to, amount0);
+            SafeTransferLib.safeTransfer(TOKEN_0, beneficiary, amount0);
         }
         if (amount1 > 0) {
-            IERC20(TOKEN_1).transfer(beneficiary, amount1);
-            // SafeTransferLib.safeTransfer(token1, to, amount1);
+            SafeTransferLib.safeTransfer(TOKEN_1, beneficiary, amount1);
         }
 
         _update();
@@ -371,14 +369,17 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         if (amount == 0) revert InvalidInput();
 
         bool isTokenZero = token == TOKEN_0;
-        bool isTokenOne = token == TOKEN_1;
-        if (!isTokenZero && !isTokenOne) revert InvalidToken();
+        if (!isTokenZero && token != TOKEN_1) revert InvalidToken();
 
         uint112 reserves = isTokenZero ? _reserves0 : _reserves1;
         if (reserves < amount) revert InsufficientReserves();
 
         address pair = address(this);
-        IERC20(token).transferFrom(pair, address(receiver), amount);
+        IERC20 tokerc = IERC20(token);
+        if (tokerc.allowance(pair, address(receiver)) < amount) {
+            tokerc.approve(address(receiver), amount);
+        }
+        tokerc.transfer(address(receiver), amount);
         // SafeTransferLib.safeTransferFrom(token, pair, address(receiver), amount);
 
         if (
@@ -388,14 +389,11 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         ) revert LoanFailed();
 
         // TODO: Fix math and allow borrower to return in both tokens
-        uint256 balance = IERC20(token).balanceOf(pair);
-        uint256 amountReturned =
-            balance > (reserves - amount) ? balance - reserves - amount : 0;
-        if (amountReturned < 0) revert InsufficientReturns();
+        uint256 balance = tokerc.balanceOf(pair);
+        uint256 fee = amount.fullMulDivUp(LOAN_FEE_BASIS_POINTS, 1e4);
 
-        uint256 requiredBalance =
-            balance * 1000 - (amountReturned * LOAN_FEE_BASIS_POINTS);
-        if (requiredBalance < reserves * 1e3) revert LiquidityDecreased();
+        uint256 amountReturned = balance - reserves;
+        if (amountReturned < amount + fee) revert InsufficientReturns();
 
         _update();
 
