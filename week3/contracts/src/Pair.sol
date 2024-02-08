@@ -390,10 +390,11 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
 
         // TODO: Fix math and allow borrower to return in both tokens
         uint256 balance = tokerc.balanceOf(pair);
-        uint256 fee = amount.fullMulDivUp(LOAN_FEE_BASIS_POINTS, 1e4);
 
         uint256 amountReturned = balance - reserves;
-        if (amountReturned < amount + fee) revert InsufficientReturns();
+        if (amountReturned < amount + _flashFee(amount)) {
+            revert InsufficientReturns();
+        }
 
         _update();
 
@@ -423,7 +424,7 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         returns (uint256)
     {
         if (token != TOKEN_0 && token != TOKEN_1) revert InvalidToken();
-        return amount.fullMulDivUp(uint256(LOAN_FEE_BASIS_POINTS), 1e4);
+        return _flashFee(amount);
     }
 
     /// @notice Returns the name of the token pair
@@ -436,6 +437,10 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
     /// @return Symbol of the token pair
     function symbol() public view override returns (string memory) {
         return _symbol;
+    }
+
+    function _flashFee(uint256 amount) internal view returns (uint256) {
+        return amount.fullMulDivUp(uint256(LOAN_FEE_BASIS_POINTS), 1e4);
     }
 
     /// @notice Updates the reserves and prices for oracle functionality
