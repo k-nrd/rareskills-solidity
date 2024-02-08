@@ -6,7 +6,10 @@ import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {Factory} from "../src/Factory.sol";
 import {Pair} from "../src/Pair.sol";
 import {MockERC20} from "./MockERC20.sol";
-import {MockFlashLoanReceiver} from "./MockFlashLoanReceiver.sol";
+import {
+    MockFlashLoanReceiver,
+    MockFlashLoanReceiverOtherToken
+} from "./MockFlashLoanReceiver.sol";
 
 contract PairTest is Test {
     using FixedPointMathLib for uint256;
@@ -121,7 +124,7 @@ contract PairTest is Test {
         assertEq(pairToken1Balance, token1Amount - expectedOutputAmount);
     }
 
-    function testFlashLoan() public {
+    function testFlashLoanSameToken() public {
         uint256 loanAmount = 1e17; // 0.1 Token
         pair.deposit(bob, bob, loanAmount, loanAmount, 0);
 
@@ -133,5 +136,19 @@ contract PairTest is Test {
 
         // Trigger the flash loan
         assertTrue(pair.flashLoan(receiver, address(token0), loanAmount, ""));
+    }
+
+    function testFlashLoanOtherToken() public {
+        uint256 token0Amount = 1e18;
+        uint256 token1Amount = 1e17;
+        pair.deposit(bob, bob, token0Amount, token1Amount, 0);
+
+        // Deploy the mock flash loan receiver
+        MockFlashLoanReceiverOtherToken receiver = new MockFlashLoanReceiverOtherToken(
+            pair, token0, token1, token0Amount / token1Amount
+        );
+
+        // Trigger the flash loan, returns will be in another token
+        assertTrue(pair.flashLoan(receiver, address(token0), 9e17, ""));
     }
 }

@@ -40,3 +40,51 @@ contract MockFlashLoanReceiver is IERC3156FlashBorrower {
         return FLASH_LOAN_SUCCESS;
     }
 }
+
+contract MockFlashLoanReceiverOtherToken is IERC3156FlashBorrower {
+    bytes32 public constant FLASH_LOAN_SUCCESS =
+        keccak256("ERC3156FlashBorrower.onFlashLoan");
+    Pair public pair;
+    MockERC20 public token0;
+    MockERC20 public token1;
+    uint256 zeroForOneRatio;
+
+    constructor(
+        Pair _pair,
+        MockERC20 _token0,
+        MockERC20 _token1,
+        uint256 _zeroForOneRatio
+    ) {
+        pair = _pair;
+        token0 = _token0;
+        token1 = _token1;
+        zeroForOneRatio = _zeroForOneRatio;
+    }
+
+    function onFlashLoan(
+        address,
+        address tokenAddress,
+        uint256 amount,
+        uint256 fee,
+        bytes calldata
+    ) external override returns (bytes32) {
+        require(
+            tokenAddress == address(token0) || tokenAddress == address(token1),
+            "Invalid token for flash loan"
+        );
+
+        MockERC20 outputToken =
+            tokenAddress == address(token0) ? token1 : token0;
+
+        // Calculate the fee if we were loaning the secondary token
+        uint256 loanReturns = (amount + fee) * zeroForOneRatio;
+
+        // In a real scenario, this might involve calling another contract or performing some action
+        // Here, it's simplified to just minting the equivalent amount of the other token
+        // Simulate conversion and repay in token1
+        outputToken.mint(address(this), loanReturns);
+        outputToken.transfer(address(pair), loanReturns);
+
+        return FLASH_LOAN_SUCCESS;
+    }
+}

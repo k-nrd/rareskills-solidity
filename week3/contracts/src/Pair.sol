@@ -102,9 +102,6 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
     /// @notice Error for when a flash loan fails to execute properly
     error LoanFailed();
 
-    /// @notice Error for when a liquidity operation results in decreased liquidity, which shouldn't happen
-    error LiquidityDecreased();
-
     /// @notice Error for when a balance exceeds the maximum uint112 value, causing an overflow
     error BalanceOverflow();
 
@@ -145,7 +142,6 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         address operator,
         address token,
         uint256 amountBorrowed,
-        uint256 amountReturned,
         bytes data
     );
 
@@ -367,19 +363,26 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         bytes calldata data
     ) external nonReentrant returns (bool) {
         if (amount == 0) revert InvalidInput();
+        if (token != TOKEN_0 && token != TOKEN_1) revert InvalidToken();
 
-        bool isTokenZero = token == TOKEN_0;
-        if (!isTokenZero && token != TOKEN_1) revert InvalidToken();
+        (
+            IERC20 borrowedToken,
+            IERC20 otherToken,
+            uint112 borrowedReserves,
+            uint112 otherReserves
+        ) = token == TOKEN_0
+            ? (IERC20(TOKEN_0), IERC20(TOKEN_1), _reserves0, _reserves1)
+            : (IERC20(TOKEN_1), IERC20(TOKEN_0), _reserves1, _reserves0);
 
-        uint112 reserves = isTokenZero ? _reserves0 : _reserves1;
-        if (reserves < amount) revert InsufficientReserves();
+        if (borrowedReserves < amount) revert InsufficientReserves();
 
-        address pair = address(this);
-        IERC20 tokerc = IERC20(token);
-        if (tokerc.allowance(pair, address(receiver)) < amount) {
-            tokerc.approve(address(receiver), amount);
+        (address pair, address borrower) = (address(this), address(receiver));
+
+        // Check allowance and transfer
+        if (borrowedToken.allowance(pair, borrower) < amount) {
+            borrowedToken.approve(borrower, amount);
         }
-        tokerc.transfer(address(receiver), amount);
+        borrowedToken.transfer(borrower, amount);
         // SafeTransferLib.safeTransferFrom(token, pair, address(receiver), amount);
 
         if (
@@ -388,19 +391,16 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
             ) != FLASH_LOAN_SUCCESS
         ) revert LoanFailed();
 
-        // TODO: Fix math and allow borrower to return in both tokens
-        uint256 balance = tokerc.balanceOf(pair);
-
-        uint256 amountReturned = balance - reserves;
-        if (amountReturned < amount + _flashFee(amount)) {
+        if (
+            borrowedToken.balanceOf(pair) * otherToken.balanceOf(pair)
+                < (borrowedReserves + _flashFee(amount)) * otherReserves
+        ) {
             revert InsufficientReturns();
         }
 
         _update();
 
-        emit Loan(
-            address(receiver), msg.sender, token, amount, amountReturned, data
-        );
+        emit Loan(address(receiver), msg.sender, token, amount, data);
 
         return true;
     }
@@ -437,10 +437,6 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
     /// @return Symbol of the token pair
     function symbol() public view override returns (string memory) {
         return _symbol;
-    }
-
-    function _flashFee(uint256 amount) internal view returns (uint256) {
-        return amount.fullMulDivUp(uint256(LOAN_FEE_BASIS_POINTS), 1e4);
     }
 
     /// @notice Updates the reserves and prices for oracle functionality
@@ -484,6 +480,13 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         _lastUpdatedTimestamp = moddedTimestamp;
 
         emit Update(_reserves0, _reserves1);
+    }
+
+    /// @notice Calculates the fee for a flash loan
+    /// @param amount Amount of the token to be loaned
+    /// @return The fee amount for the flash loan
+    function _flashFee(uint256 amount) internal view returns (uint256) {
+        return amount.fullMulDivUp(uint256(LOAN_FEE_BASIS_POINTS), 1e4);
     }
 
     /// @notice Calculates the price of one token in terms of the other
