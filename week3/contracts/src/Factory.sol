@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
-import {IERC20} from "openzeppelin/token/ERC20/IERC20.sol";
 import {Pair} from "./Pair.sol";
 
 contract Factory {
     mapping(address => mapping(address => address)) public getPair;
     address[] public allPairs;
+
+    error IdenticalTokens();
+    error InvalidToken();
+    error PairExists();
 
     event PairCreated(
         address indexed token0, address indexed token1, address pair, uint256
@@ -19,18 +22,14 @@ contract Factory {
     function createPair(
         string memory name,
         string memory symbol,
-        address tokenA,
-        address tokenB,
+        address token0,
+        address token1,
         uint128 swapFeeBasisPoints,
         uint128 loanFeeBasisPoints
     ) external returns (address) {
-        require(tokenA != tokenB, "FACTORY: IDENTICAL_TOKENS");
-
-        // Smaller address goes first
-        (address token0, address token1) =
-            tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
-        require(token0 != address(0), "FACTORY: INVALID_TOKEN_ADDRESS");
-        require(getPair[token0][token1] == address(0), "FACTORY: PAIR_EXISTS");
+        if (token0 == token1) revert IdenticalTokens();
+        if (token0 == address(0) || token1 == address(0)) revert InvalidToken();
+        if (getPair[token0][token1] != address(0)) revert PairExists();
 
         address pair = address(
             new Pair(
