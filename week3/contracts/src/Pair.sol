@@ -93,26 +93,19 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
     /// @notice Error for when the slippage is too high in a liquidity or swap operation
     error SlippageExceeded();
 
-    /// @notice Error for when the pair contract does not have sufficient allowance to perform an operation
-    error PairInsufficientAllowance();
-
-    /// @notice Error for when the operator does not have sufficient allowance to perform an operation on behalf of the holder
-    error OperatorInsufficientAllowance();
-
     /// @notice Error for when a flash loan fails to execute properly
     error LoanFailed();
 
     /// @notice Error for when a balance exceeds the maximum uint112 value, causing an overflow
-    error BalanceOverflow();
+    error ReservesOverflow();
 
     /// @notice Emitted when reserves are updated
     event Update(uint112 reserves0, uint112 reserves1);
 
     /// @notice Emitted on liquidity deposit
     event Deposit(
-        address holder,
+        address depositor,
         address beneficiary,
-        address operator,
         uint256 amount0,
         uint256 amount1,
         uint256 sharesMinted
@@ -122,7 +115,6 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
     event Withdraw(
         address holder,
         address beneficiary,
-        address operator,
         uint256 amount0,
         uint256 amount1,
         uint256 sharesBurned
@@ -131,7 +123,7 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
     /// @notice Emitted on swap execution
     event Swap(
         address swapper,
-        address operator,
+        address receiver,
         uint256 inputAmount,
         uint256 outputAmount
     );
@@ -162,6 +154,9 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         uint128 loanFeeBasisPoints_
     ) {
         if (msg.sender != FACTORY_ADDRESS) revert InvalidFactory();
+        if (token0_ == address(0) || token1_ == address(0)) {
+            revert InvalidInput();
+        }
         _name = name_;
         _symbol = symbol_;
 
@@ -172,7 +167,6 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
     }
 
     /// @notice Deposits amount into the pool in exchange for liquidity shares
-    /// @param holder Holder of deposited tokens
     /// @param beneficiary Recipient of shares
     /// @param amount0 Amount of token0 to deposit
     /// @param amount1 Amount of token1 to deposit
@@ -180,7 +174,6 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
     //  @return Number of shares minted
     /// @dev Emits a Deposit event upon successful deposit
     function deposit(
-        address holder,
         address beneficiary,
         uint256 amount0,
         uint256 amount1,
@@ -188,24 +181,13 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
     ) external nonReentrant returns (uint256) {
         (IERC20 tok0erc, IERC20 tok1erc) = (IERC20(TOKEN_0), IERC20(TOKEN_1));
 
-        // Either msg.sender is the owner or they have allowance on tokens
-        if (
-            msg.sender != holder
-                && (
-                    tok0erc.allowance(holder, msg.sender) < amount0
-                        || tok1erc.allowance(holder, msg.sender) < amount1
-                )
-        ) {
-            revert OperatorInsufficientAllowance();
-        }
-
         // Gas savings
         address pair = address(this);
         if (
-            tok0erc.allowance(holder, pair) < amount0
-                || tok1erc.allowance(holder, pair) < amount1
+            tok0erc.allowance(msg.sender, pair) < amount0
+                || tok1erc.allowance(msg.sender, pair) < amount1
         ) {
-            revert PairInsufficientAllowance();
+            revert InsufficientAllowance();
         }
 
         uint256 totalShares = totalSupply();
@@ -227,14 +209,14 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
 
         _mint(beneficiary, shares);
 
-        emit Deposit(holder, beneficiary, msg.sender, amount0, amount1, shares);
+        emit Deposit(msg.sender, beneficiary, amount0, amount1, shares);
 
         // Don't execute 2 transfers if we only need 1
         if (amount0 > 0) {
-            SafeTransferLib.safeTransferFrom(TOKEN_0, holder, pair, amount0);
+            SafeTransferLib.safeTransferFrom(TOKEN_0, msg.sender, pair, amount0);
         }
         if (amount1 > 0) {
-            SafeTransferLib.safeTransferFrom(TOKEN_1, holder, pair, amount1);
+            SafeTransferLib.safeTransferFrom(TOKEN_1, msg.sender, pair, amount1);
         }
 
         _update();
@@ -243,7 +225,6 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
     }
 
     /// @notice Withdraws amount from the pool by burning liquidity shares
-    /// @param holder Holder of the shares that will be burned
     /// @param beneficiary Tokens recipient
     /// @param shares Number of liquidity shares to burn
     /// @param minAmount0Expected Minimum amount of token0 expected to prevent slippage
@@ -251,17 +232,11 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
     /// @return Number of tokens returned for each token of the pair
     /// @dev Emits a Withdraw event upon successful withdrawal
     function withdraw(
-        address holder,
         address beneficiary,
         uint256 shares,
         uint256 minAmount0Expected,
         uint256 minAmount1Expected
     ) external nonReentrant returns (uint256, uint256) {
-        // Either msg.sender is the owner or they have allowance on shares
-        if (msg.sender != holder && allowance(holder, msg.sender) < shares) {
-            revert OperatorInsufficientAllowance();
-        }
-
         // Gas savings
         uint256 totalShares = totalSupply();
         // Always round in favor of liquidity providers
@@ -274,9 +249,9 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
             revert SlippageExceeded();
         }
 
-        _burn(holder, shares);
+        _burn(msg.sender, shares);
 
-        emit Withdraw(holder, beneficiary, msg.sender, amount0, amount1, shares);
+        emit Withdraw(msg.sender, beneficiary, amount0, amount1, shares);
 
         // Don't execute 2 transfers if we only need 1
         if (amount0 > 0) {
@@ -292,13 +267,13 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
     }
 
     /// @notice Swaps an amount of one token for an amount of the other token
-    /// @param swapper Address executing the swap
+    /// @param receiver Recipient of swapped tokens
     /// @param zeroForOne Direction of swap (true for token0 to token1, false for token1 to token0)
     /// @param inputAmount Amount of input token
     /// @param minAmountExpected Minimum amount of output token expected to prevent slippage
     /// @dev Emits a Swap event upon successful swap
     function swap(
-        address swapper,
+        address receiver,
         bool zeroForOne,
         uint256 inputAmount,
         uint256 minAmountExpected
@@ -316,17 +291,9 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
             ? (TOKEN_0, TOKEN_1, _reserves0, _reserves1)
             : (TOKEN_1, TOKEN_0, _reserves1, _reserves0);
 
-        IERC20 inputErc = IERC20(input);
-        // Either msg.sender is the owner or they have allowance on input tokens
-        if (
-            msg.sender != swapper
-                && inputErc.allowance(swapper, msg.sender) < inputAmount
-        ) {
-            revert OperatorInsufficientAllowance();
-        }
         // We also need to have allowance on the input token
-        if (inputErc.allowance(swapper, pair) < inputAmount) {
-            revert PairInsufficientAllowance();
+        if (IERC20(input).allowance(msg.sender, pair) < inputAmount) {
+            revert InsufficientAllowance();
         }
 
         // We need non-zero input reserves to calculate the price
@@ -341,10 +308,10 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         if (outputBalance <= netOutputAmount) revert InsufficientReserves();
         if (netOutputAmount < minAmountExpected) revert SlippageExceeded();
 
-        emit Swap(swapper, msg.sender, inputAmount, netOutputAmount);
+        emit Swap(msg.sender, receiver, inputAmount, netOutputAmount);
 
-        SafeTransferLib.safeTransferFrom(input, swapper, pair, inputAmount);
-        SafeTransferLib.safeTransfer(output, swapper, netOutputAmount);
+        SafeTransferLib.safeTransferFrom(input, msg.sender, pair, inputAmount);
+        SafeTransferLib.safeTransfer(output, receiver, netOutputAmount);
 
         _update();
     }
@@ -379,11 +346,13 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         (address pair, address borrower) = (address(this), address(receiver));
 
         // Check allowance and transfer
-        if (borrowedToken.allowance(pair, borrower) < amount) {
-            borrowedToken.approve(borrower, amount);
+        if (
+            borrowedToken.allowance(pair, borrower) < amount
+                && !borrowedToken.approve(borrower, amount)
+        ) {
+            revert InsufficientAllowance();
         }
-        borrowedToken.transfer(borrower, amount);
-        // SafeTransferLib.safeTransferFrom(token, pair, address(receiver), amount);
+        SafeTransferLib.safeTransfer(token, borrower, amount);
 
         if (
             IERC3156FlashBorrower(receiver).onFlashLoan(
@@ -398,7 +367,12 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
             revert InsufficientReturns();
         }
 
+        // This function is nonReentrant
+        // slither-disable-start reentrancy-no-eth
+        // slither-disable-start reentrancy-benign
         _update();
+        // slither-disable-end reentrancy-no-eth
+        // slither-disable-end reentrancy-benign
 
         emit Loan(address(receiver), msg.sender, token, amount, data);
 
@@ -448,18 +422,20 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         uint256 balance1 = IERC20(TOKEN_1).balanceOf(pair);
         uint112 max112 = type(uint112).max;
         if (max112 < balance0 || max112 < balance1) {
-            revert BalanceOverflow();
+            revert ReservesOverflow();
         }
 
         // Timestamp overflows uint32 in 02/07/2106
         // Since we mod it, the arithmetic below is actually safe
         // Oracles are required to check prices at least once every 136 years though.
+        // slither-disable-next-line weak-prng
         uint32 moddedTimestamp = uint32(block.timestamp % 2 ** 32);
         uint32 timeElapsed;
         unchecked {
             timeElapsed = moddedTimestamp - _lastUpdatedTimestamp;
         }
 
+        // slither-disable-next-line timestamp
         if (timeElapsed > 0 && _reserves0 > 0 && _reserves1 > 0) {
             uint256 price0 = _price(true, _reserves0, _reserves1);
             uint256 price1 = _price(false, _reserves0, _reserves1);
