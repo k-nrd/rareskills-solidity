@@ -179,10 +179,10 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         uint256 amount1,
         uint256 minSharesExpected
     ) external nonReentrant returns (uint256) {
-        (IERC20 tok0erc, IERC20 tok1erc) = (IERC20(TOKEN_0), IERC20(TOKEN_1));
-
         // Gas savings
         address pair = address(this);
+        (IERC20 tok0erc, IERC20 tok1erc) = (IERC20(TOKEN_0), IERC20(TOKEN_1));
+
         if (
             tok0erc.allowance(msg.sender, pair) < amount0
                 || tok1erc.allowance(msg.sender, pair) < amount1
@@ -253,13 +253,9 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
 
         emit Withdraw(msg.sender, beneficiary, amount0, amount1, shares);
 
-        // Don't execute 2 transfers if we only need 1
-        if (amount0 > 0) {
-            SafeTransferLib.safeTransfer(TOKEN_0, beneficiary, amount0);
-        }
-        if (amount1 > 0) {
-            SafeTransferLib.safeTransfer(TOKEN_1, beneficiary, amount1);
-        }
+        // We'll almost always execute two transfers
+        SafeTransferLib.safeTransfer(TOKEN_0, beneficiary, amount0);
+        SafeTransferLib.safeTransfer(TOKEN_1, beneficiary, amount1);
 
         _update();
 
