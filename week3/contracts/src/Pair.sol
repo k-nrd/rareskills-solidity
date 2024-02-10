@@ -16,7 +16,7 @@ import {IERC3156FlashBorrower} from
 /// @notice Implements an AMM with ERC20 token pairing, liquidity provision, swapping, and flash loan capabilities.
 /// @dev Inherits functionality from ERC20, IERC3156FlashLender, and ReentrancyGuard.
 contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
-    using SafeTransferLib for *;
+    using SafeTransferLib for address;
     using FixedPointMathLib for uint256;
 
     // Shared storage slots:
@@ -181,11 +181,10 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
     ) external nonReentrant returns (uint256) {
         // Gas savings
         address pair = address(this);
-        (IERC20 tok0erc, IERC20 tok1erc) = (IERC20(TOKEN_0), IERC20(TOKEN_1));
 
         if (
-            tok0erc.allowance(msg.sender, pair) < amount0
-                || tok1erc.allowance(msg.sender, pair) < amount1
+            IERC20(TOKEN_0).allowance(msg.sender, pair) < amount0
+                || IERC20(TOKEN_1).allowance(msg.sender, pair) < amount1
         ) {
             revert InsufficientAllowance();
         }
@@ -213,10 +212,10 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
 
         // Don't execute 2 transfers if we only need 1
         if (amount0 > 0) {
-            SafeTransferLib.safeTransferFrom(TOKEN_0, msg.sender, pair, amount0);
+            TOKEN_0.safeTransferFrom(msg.sender, pair, amount0);
         }
         if (amount1 > 0) {
-            SafeTransferLib.safeTransferFrom(TOKEN_1, msg.sender, pair, amount1);
+            TOKEN_1.safeTransferFrom(msg.sender, pair, amount1);
         }
 
         _update();
@@ -254,8 +253,8 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         emit Withdraw(msg.sender, beneficiary, amount0, amount1, shares);
 
         // We'll almost always execute two transfers
-        SafeTransferLib.safeTransfer(TOKEN_0, beneficiary, amount0);
-        SafeTransferLib.safeTransfer(TOKEN_1, beneficiary, amount1);
+        TOKEN_0.safeTransfer(beneficiary, amount0);
+        TOKEN_1.safeTransfer(beneficiary, amount1);
 
         _update();
 
@@ -306,8 +305,8 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
 
         emit Swap(msg.sender, receiver, inputAmount, netOutputAmount);
 
-        SafeTransferLib.safeTransferFrom(input, msg.sender, pair, inputAmount);
-        SafeTransferLib.safeTransfer(output, receiver, netOutputAmount);
+        input.safeTransferFrom(msg.sender, pair, inputAmount);
+        output.safeTransfer(receiver, netOutputAmount);
 
         _update();
     }
@@ -328,27 +327,20 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         if (amount == 0) revert InvalidInput();
         if (token != TOKEN_0 && token != TOKEN_1) revert InvalidToken();
 
-        (
-            IERC20 borrowedToken,
-            IERC20 otherToken,
-            uint112 borrowedReserves,
-            uint112 otherReserves
-        ) = token == TOKEN_0
-            ? (IERC20(TOKEN_0), IERC20(TOKEN_1), _reserves0, _reserves1)
-            : (IERC20(TOKEN_1), IERC20(TOKEN_0), _reserves1, _reserves0);
+        (IERC20 otherToken, uint112 borrowedReserves, uint112 otherReserves) =
+        token == TOKEN_0
+            ? (IERC20(TOKEN_1), _reserves0, _reserves1)
+            : (IERC20(TOKEN_0), _reserves1, _reserves0);
 
         if (borrowedReserves < amount) revert InsufficientReserves();
 
         (address pair, address borrower) = (address(this), address(receiver));
 
         // Check allowance and transfer
-        if (
-            borrowedToken.allowance(pair, borrower) < amount
-                && !borrowedToken.approve(borrower, amount)
-        ) {
-            revert InsufficientAllowance();
+        if (IERC20(token).allowance(pair, borrower) < amount) {
+            token.safeApprove(borrower, amount);
         }
-        SafeTransferLib.safeTransfer(token, borrower, amount);
+        token.safeTransfer(borrower, amount);
 
         if (
             IERC3156FlashBorrower(receiver).onFlashLoan(
@@ -357,7 +349,7 @@ contract Pair is ERC20, IERC3156FlashLender, ReentrancyGuard {
         ) revert LoanFailed();
 
         if (
-            borrowedToken.balanceOf(pair) * otherToken.balanceOf(pair)
+            IERC20(token).balanceOf(pair) * otherToken.balanceOf(pair)
                 < (borrowedReserves + _flashFee(amount)) * otherReserves
         ) {
             revert InsufficientReturns();
