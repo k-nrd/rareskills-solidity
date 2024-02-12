@@ -25,3 +25,6 @@
 [submodule "week3/contracts/lib/openzeppelin-contracts"]
 	path = week3/contracts/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "week4/cte-token-whale/lib/forge-std"]
+	path = week4/cte-token-whale/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
