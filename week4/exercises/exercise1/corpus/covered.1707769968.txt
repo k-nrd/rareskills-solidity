@@ -1,0 +1,71 @@
+/home/knrd/code/courses/rareskills-solidity/week4/exercises/exercise1/template.sol
+  1 |     | // SPDX-License-Identifier: AGPL-3.0
+  2 |     | pragma solidity ^0.8.0;
+  3 |     | 
+  4 |     | import "./token.sol";
+  5 |     | 
+  6 |     | /// @dev Run the template with
+  7 |     | ///      ```
+  8 |     | ///      solc-select use 0.8.0
+  9 |     | ///      echidna program-analysis/echidna/exercises/exercise1/template.sol
+ 10 |     | ///      ```
+ 11 | *r  | contract TestToken is Token {
+ 12 |     |     address echidna = tx.origin;
+ 13 |     | 
+ 14 |     |     constructor() {
+ 15 |     |         balances[echidna] = 10_000;
+ 16 |     |     }
+ 17 |     | 
+ 18 |     |     function echidna_test_balance() public view returns (bool) {
+ 19 |     |         return balances[echidna] <= 10_000;
+ 20 |     |     }
+ 21 |     | }
+ 22 |     | 
+
+/home/knrd/code/courses/rareskills-solidity/week4/exercises/exercise1/token.sol
+  1 |     | // SPDX-License-Identifier: AGPL-3.0
+  2 |     | pragma solidity ^0.8.0;
+  3 |     | 
+  4 |     | contract Ownable {
+  5 | *   |     address public owner = msg.sender;
+  6 |     | 
+  7 |     |     modifier onlyOwner() {
+  8 | *r  |         require(msg.sender == owner, "Ownable: Caller is not the owner.");
+  9 |     |         _;
+ 10 |     |     }
+ 11 |     | }
+ 12 |     | 
+ 13 |     | contract Pausable is Ownable {
+ 14 |     |     bool private _paused;
+ 15 |     | 
+ 16 | *   |     function paused() public view returns (bool) {
+ 17 | *   |         return _paused;
+ 18 |     |     }
+ 19 |     | 
+ 20 | *   |     function pause() public onlyOwner {
+ 21 | *   |         _paused = true;
+ 22 |     |     }
+ 23 |     | 
+ 24 | *   |     function resume() public onlyOwner {
+ 25 | *   |         _paused = false;
+ 26 |     |     }
+ 27 |     | 
+ 28 |     |     modifier whenNotPaused() {
+ 29 | *r  |         require(!_paused, "Pausable: Contract is paused.");
+ 30 |     |         _;
+ 31 |     |     }
+ 32 |     | }
+ 33 |     | 
+ 34 |     | contract Token is Ownable, Pausable {
+ 35 | *   |     mapping(address => uint256) public balances;
+ 36 |     | 
+ 37 | *   |     function transfer(address to, uint256 value) public whenNotPaused {
+ 38 |     |         // unchecked to save gas
+ 39 |     |         unchecked {
+ 40 | *   |             balances[msg.sender] -= value;
+ 41 | *   |             balances[to] += value;
+ 42 |     |         }
+ 43 |     |     }
+ 44 |     | }
+ 45 |     | 
+

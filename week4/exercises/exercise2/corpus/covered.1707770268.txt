@@ -1,0 +1,67 @@
+/home/knrd/code/courses/rareskills-solidity/week4/exercises/exercise2/template.sol
+  1 |     | // SPDX-License-Identifier: AGPL-3.0
+  2 |     | pragma solidity ^0.8.0;
+  3 |     | 
+  4 |     | import "./token.sol";
+  5 |     | 
+  6 |     | /// @dev Run the template with
+  7 |     | ///      ```
+  8 |     | ///      solc-select use 0.8.0
+  9 |     | ///      echidna program-analysis/echidna/exercises/exercise2/template.sol
+ 10 |     | ///      ```
+ 11 | *r  | contract TestToken is Token {
+ 12 |     |     constructor() {
+ 13 |     |         pause(); // pause the contract
+ 14 |     |         owner = address(0); // lose ownership
+ 15 |     |     }
+ 16 |     | 
+ 17 |     |     function echidna_cannot_be_unpause() public view returns (bool) {
+ 18 |     |         return paused();
+ 19 |     |     }
+ 20 |     | }
+ 21 |     | 
+
+/home/knrd/code/courses/rareskills-solidity/week4/exercises/exercise2/token.sol
+  1 |     | // SPDX-License-Identifier: AGPL-3.0
+  2 |     | pragma solidity ^0.8.0;
+  3 |     | 
+  4 |     | contract Ownable {
+  5 | *   |     address public owner = msg.sender;
+  6 |     | 
+  7 |     |     modifier onlyOwner() {
+  8 | *r  |         require(owner == msg.sender);
+  9 |     |         _;
+ 10 |     |     }
+ 11 |     | }
+ 12 |     | 
+ 13 |     | contract Pausable is Ownable {
+ 14 |     |     bool private _paused;
+ 15 |     | 
+ 16 | *   |     function paused() public view returns (bool) {
+ 17 | *   |         return _paused;
+ 18 |     |     }
+ 19 |     | 
+ 20 | *   |     function pause() public onlyOwner {
+ 21 |     |         _paused = true;
+ 22 |     |     }
+ 23 |     | 
+ 24 | *   |     function resume() public onlyOwner {
+ 25 |     |         _paused = false;
+ 26 |     |     }
+ 27 |     | 
+ 28 |     |     modifier whenNotPaused() {
+ 29 | *r  |         require(!_paused, "Pausable: Contract is paused.");
+ 30 |     |         _;
+ 31 |     |     }
+ 32 |     | }
+ 33 |     | 
+ 34 |     | contract Token is Ownable, Pausable {
+ 35 | *   |     mapping(address => uint256) public balances;
+ 36 |     | 
+ 37 | *   |     function transfer(address to, uint256 value) public whenNotPaused {
+ 38 |     |         balances[msg.sender] -= value;
+ 39 |     |         balances[to] += value;
+ 40 |     |     }
+ 41 |     | }
+ 42 |     | 
+

@@ -1,0 +1,95 @@
+/home/knrd/code/courses/rareskills-solidity/week4/exercises/exercise3/mintable.sol
+  1 |     | // SPDX-License-Identifier: AGPL-3.0
+  2 |     | pragma solidity ^0.8.0;
+  3 |     | 
+  4 |     | import "./token.sol";
+  5 |     | 
+  6 |     | contract MintableToken is Token {
+  7 | *   |     int256 public totalMinted;
+  8 | *   |     int256 public totalMintable;
+  9 |     | 
+ 10 |     |     constructor(int256 totalMintable_) {
+ 11 |     |         totalMintable = totalMintable_;
+ 12 |     |     }
+ 13 |     | 
+ 14 | *   |     function mint(uint256 value) public onlyOwner {
+ 15 | *r  |         require(int256(value) + totalMinted < totalMintable);
+ 16 | *   |         totalMinted += int256(value);
+ 17 |     | 
+ 18 | *   |         balances[msg.sender] += value;
+ 19 |     |     }
+ 20 |     | }
+ 21 |     | 
+
+/home/knrd/code/courses/rareskills-solidity/week4/exercises/exercise3/template.sol
+  1 |     | // SPDX-License-Identifier: AGPL-3.0
+  2 |     | pragma solidity ^0.8.0;
+  3 |     | 
+  4 |     | import "./mintable.sol";
+  5 |     | 
+  6 |     | /// @dev Run the template with
+  7 |     | ///      ```
+  8 |     | ///      solc-select use 0.8.0
+  9 |     | ///      echidna program-analysis/echidna/exercises/exercise3/template.sol --contract TestToken
+ 10 |     | ///      ```
+ 11 |     | int256 constant TOTAL_SUPPLY = 10_000;
+ 12 |     | 
+ 13 | *or | contract TestToken is MintableToken {
+ 14 |     |     address echidna = msg.sender;
+ 15 |     | 
+ 16 |     |     constructor() MintableToken(TOTAL_SUPPLY) {
+ 17 |     |         owner = echidna;
+ 18 |     |     }
+ 19 |     | 
+ 20 |     |     function echidna_test_balance() public view returns (bool) {
+ 21 |     |         return totalMinted <= TOTAL_SUPPLY;
+ 22 |     |     }
+ 23 |     | }
+ 24 |     | 
+
+/home/knrd/code/courses/rareskills-solidity/week4/exercises/exercise3/token.sol
+  1 |     | // SPDX-License-Identifier: AGPL-3.0
+  2 |     | pragma solidity ^0.8.0;
+  3 |     | 
+  4 |     | /// @notice The issues from exercise 1 and 2 are fixed.
+  5 |     | 
+  6 |     | contract Ownable {
+  7 | *   |     address public owner = msg.sender;
+  8 |     | 
+  9 |     |     modifier onlyOwner() {
+ 10 | *r  |         require(msg.sender == owner, "Ownable: Caller is not the owner.");
+ 11 |     |         _;
+ 12 |     |     }
+ 13 |     | }
+ 14 |     | 
+ 15 |     | contract Pausable is Ownable {
+ 16 |     |     bool private _paused;
+ 17 |     | 
+ 18 | *   |     function paused() public view returns (bool) {
+ 19 | *   |         return _paused;
+ 20 |     |     }
+ 21 |     | 
+ 22 | *   |     function pause() public onlyOwner {
+ 23 | *   |         _paused = true;
+ 24 |     |     }
+ 25 |     | 
+ 26 | *   |     function resume() public onlyOwner {
+ 27 | *   |         _paused = false;
+ 28 |     |     }
+ 29 |     | 
+ 30 |     |     modifier whenNotPaused() {
+ 31 | *r  |         require(!_paused, "Pausable: Contract is paused.");
+ 32 |     |         _;
+ 33 |     |     }
+ 34 |     | }
+ 35 |     | 
+ 36 |     | contract Token is Ownable, Pausable {
+ 37 | *   |     mapping(address => uint256) public balances;
+ 38 |     | 
+ 39 | *   |     function transfer(address to, uint256 value) public whenNotPaused {
+ 40 | *   |         balances[msg.sender] -= value;
+ 41 | *   |         balances[to] += value;
+ 42 |     |     }
+ 43 |     | }
+ 44 |     | 
+
