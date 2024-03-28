@@ -19,3 +19,6 @@
 [submodule "weeks8-11/damn-vulnerable-defi/unstoppable/lib/openzeppelin-contracts"]
 	path = weeks8-11/damn-vulnerable-defi/unstoppable/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "weeks8-11/damn-vulnerable-defi/unstoppable/lib/solmate"]
+	path = weeks8-11/damn-vulnerable-defi/unstoppable/lib/solmate
+	url = https://github.com/transmissions11/solmate
