@@ -13,3 +13,6 @@
 [submodule "weeks8-11/damn-vulnerable-defi/side-entrance/lib/solady"]
 	path = weeks8-11/damn-vulnerable-defi/side-entrance/lib/solady
 	url = https://github.com/vectorized/solady
+[submodule "weeks8-11/damn-vulnerable-defi/unstoppable/lib/forge-std"]
+	path = weeks8-11/damn-vulnerable-defi/unstoppable/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
