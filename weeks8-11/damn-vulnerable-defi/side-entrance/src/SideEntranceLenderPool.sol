@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.0;
 
-import "solady/src/utils/SafeTransferLib.sol";
+import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
 
 interface IFlashLoanEtherReceiver {
     function execute() external payable;

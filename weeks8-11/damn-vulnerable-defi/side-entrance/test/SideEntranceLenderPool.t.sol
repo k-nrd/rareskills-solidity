@@ -2,23 +2,23 @@
 pragma solidity ^0.8.13;
 
 import {Test, console2} from "forge-std/Test.sol";
-import {Counter} from "../src/Counter.sol";
+import {SideEntranceLenderPool, IFlashLoanEtherReceiver} from "../src/SideEntranceLenderPool.sol";
+import {SideEntranceExploiter} from "../src/SideEntranceExploiter.sol";
 
-contract CounterTest is Test {
-    Counter public counter;
+contract SideEntranceLenderPoolTest is Test {
+    SideEntranceLenderPool pool;
+    SideEntranceExploiter exploiter;
 
     function setUp() public {
-        counter = new Counter();
-        counter.setNumber(0);
+        pool = new SideEntranceLenderPool();
+        exploiter = new SideEntranceExploiter(pool);
+
+        vm.deal(address(exploiter), 1 ether);
+        vm.deal(address(pool), 1000 ether);
     }
 
-    function test_Increment() public {
-        counter.increment();
-        assertEq(counter.number(), 1);
-    }
-
-    function testFuzz_SetNumber(uint256 x) public {
-        counter.setNumber(x);
-        assertEq(counter.number(), x);
+    function test_Attack() public {
+        exploiter.attack();
+        assertEq(address(pool).balance, 0);
     }
 }
