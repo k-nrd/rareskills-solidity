@@ -7,3 +7,6 @@
 [submodule "week1/contracts/lib/openzeppelin-contracts"]
 	path = week1/contracts/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "weeks8-11/damn-vulnerable-defi/side-entrance/lib/forge-std"]
+	path = weeks8-11/damn-vulnerable-defi/side-entrance/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
