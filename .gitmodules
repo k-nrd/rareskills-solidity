@@ -28,3 +28,6 @@
 [submodule "weeks8-11/ethernaut/naught-coin/lib/forge-std"]
 	path = weeks8-11/ethernaut/naught-coin/lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
+[submodule "weeks8-11/ethernaut/naught-coin/lib/openzeppelin-contracts"]
+	path = weeks8-11/ethernaut/naught-coin/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
