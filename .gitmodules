@@ -34,3 +34,6 @@
 [submodule "weeks8-11/damn-vulnerable-defi/truster/lib/forge-std"]
 	path = weeks8-11/damn-vulnerable-defi/truster/lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
+[submodule "weeks8-11/damn-vulnerable-defi/truster/lib/openzeppelin-contracts"]
+	path = weeks8-11/damn-vulnerable-defi/truster/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
