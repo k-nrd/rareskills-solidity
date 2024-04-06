@@ -25,12 +25,8 @@ describe(NAME, function() {
     })
 
     it("conduct your attack here", async function() {
-      const overrides = {
-        gasPrice: 10000000000, // Can set this >= to the number read from Ganache window
-        gasLimit: 6721975, // Use the same gasLimit as read from Ganache window (or a bit higher if still having issue)
-      };
-      const attackerProxy = await ethers.getContractFactory("Overmint3AttackerProxy")
-      await attackerProxy.connect(attackerWallet).deploy(victimContract.address, overrides)
+      const attackerProxy = await ethers.getContractFactory("Overmint3Attacker")
+      await attackerProxy.connect(attackerWallet).deploy(victimContract.address)
     });
 
     after(async function() {
