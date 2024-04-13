@@ -55,3 +55,6 @@
 [submodule "weeks8-11/damn-vulnerable-defi/naive-receiver/lib/openzeppelin-contracts"]
 	path = weeks8-11/damn-vulnerable-defi/naive-receiver/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "weeks8-11/damn-vulnerable-defi/naive-receiver/lib/solady"]
+	path = weeks8-11/damn-vulnerable-defi/naive-receiver/lib/solady
+	url = https://github.com/vectorized/solady
