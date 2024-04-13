@@ -40,6 +40,3 @@
 [submodule "weeks8-11/damn-vulnerable-defi/truster/lib/solmate"]
 	path = weeks8-11/damn-vulnerable-defi/truster/lib/solmate
 	url = https://github.com/transmissions11/solmate
-[submodule "weeks8-11/ethernaut/gatekeeper-one/lib/forge-std"]
-	path = weeks8-11/ethernaut/gatekeeper-one/lib/forge-std
-	url = https://github.com/foundry-rs/forge-std
