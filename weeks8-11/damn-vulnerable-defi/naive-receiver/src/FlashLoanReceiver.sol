@@ -2,9 +2,9 @@
 
 pragma solidity ^0.8.0;
 
-import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
+import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
 import {IERC3156FlashBorrower} from "@openzeppelin/contracts/interfaces/IERC3156FlashBorrower.sol";
-import "./NaiveReceiverLenderPool.sol";
+import {NaiveReceiverLenderPool} from "./NaiveReceiverLenderPool.sol";
 
 /**
  * There’s a pool with 1000 ETH in balance, offering flash loans. It has a fixed fee of 1 ETH.
