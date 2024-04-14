@@ -27,6 +27,7 @@ contract DeleteUser {
         user = users[users.length - 1];
         users.pop();
 
-        msg.sender.call{value: amount}("");
+        (bool ok,) = msg.sender.call{value: amount}("");
+        require(ok, "withdraw failed");
     }
 }
