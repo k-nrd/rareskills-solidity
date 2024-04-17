@@ -40,7 +40,7 @@ contract TheRewarderAttackerTest is Test {
             )
         );
 
-        attacker = new TheRewarderAttacker();
+        attacker = new TheRewarderAttacker(rewarderPool, flashLoanerPool);
 
         dvt.transfer(address(flashLoanerPool), TOKENS_IN_LENDER_POOL);
 
@@ -76,8 +76,15 @@ contract TheRewarderAttackerTest is Test {
     }
 
     function test_Attack() public {
+        vm.warp(block.timestamp + 5 days);
+        attacker.attack();
+
         // Success conditions
+        //
+        // Only one round must have taken place
         assertEq(rewarderPool.roundNumber(), 3);
+
+        // Users should get neglegible rewards this round
         for (uint256 i = 0; i < users.length; i++) {
             vm.prank(users[i]);
             rewarderPool.distributeRewards();
@@ -86,10 +93,15 @@ contract TheRewarderAttackerTest is Test {
             assertLt(delta, 10 ** 16);
         }
 
+        // Rewards must have been issued to the player account
         assertGt(rewardToken.totalSupply(), rewarderPool.REWARDS());
         uint256 attackerRewards = rewardToken.balanceOf(address(attacker));
         assertGt(attackerRewards, 0);
+
+        // The amount of rewards earned should be close to total available amount
         assertLt(rewarderPool.REWARDS() - attackerRewards, 10 ** 17);
+
+        // Balance of DVT tokens in player and lending pool hasn't changed
         assertEq(dvt.balanceOf(address(attacker)), 0);
         assertEq(dvt.balanceOf(address(flashLoanerPool)), TOKENS_IN_LENDER_POOL);
     }
