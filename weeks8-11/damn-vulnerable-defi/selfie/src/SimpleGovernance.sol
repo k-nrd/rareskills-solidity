@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "../DamnValuableTokenSnapshot.sol";
-import "./ISimpleGovernance.sol";
+import {DamnValuableTokenSnapshot} from "./DamnValuableTokenSnapshot.sol";
+import {ISimpleGovernance} from "./ISimpleGovernance.sol";
 /**
  * @title SimpleGovernance
  * @author Damn Vulnerable DeFi (https://damnvulnerabledefi.xyz)
