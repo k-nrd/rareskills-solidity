@@ -79,3 +79,6 @@
 [submodule "week12/huff-puzzles/lib/foundry-huff"]
 	path = week12/huff-puzzles/lib/foundry-huff
 	url = https://github.com/huff-language/foundry-huff
+[submodule "week12/huff-puzzles/lib/forge-std"]
+	path = week12/huff-puzzles/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
