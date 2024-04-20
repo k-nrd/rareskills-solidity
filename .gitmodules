@@ -76,3 +76,6 @@
 [submodule "weeks8-11/damn-vulnerable-defi/selfie/lib/openzeppelin-contracts"]
 	path = weeks8-11/damn-vulnerable-defi/selfie/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "week12/huff-puzzles"]
+	path = week12/huff-puzzles
+	url = git@github.com:RareSkills/huff-puzzles.git
