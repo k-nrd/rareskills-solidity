@@ -25,13 +25,11 @@
     0x04 calldataload         // [num1, num2]
 
     // Bail out if num1 is zero
-    dup1                      // [num1, num1, num2]
-    iszero 
+    dup1 iszero               // [num1_is_zero, num1, num2]
     zero jumpi 
 
     // Bail out if num2 is zero
-    dup2                      // [num2, num1, num2]
-    iszero
+    dup2 iszero               // [num2_is_zero, num1, num2]
     zero jumpi
 
     // Duplicate and multiply
