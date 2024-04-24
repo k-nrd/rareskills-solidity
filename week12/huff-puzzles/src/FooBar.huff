@@ -2,7 +2,8 @@
 /** 
  *  FOO_BAR HUFF EXERCISE
  *
- *  Majority of ethereum contracts hold logic divide this logic into functions which users can specify and call to execute a particular logic without clashing into the other
+ *  Majority of ethereum contracts hold logic divide this logic into functions 
+ *  which users can specify and call to execute a particular logic without clashing into the other
  *  
  *  The task is to write within the `MAIN` macro below, huff code that mimics 2 solidity functions. 
  *      - One named `foo()` that simply returns 2,
@@ -16,5 +17,19 @@
 
 
 #define macro MAIN() = takes(0) returns(0) {
+  0x00 calldataload   // [calldata @ 0x00]
+  0xe0 shr            // [func_sig (calldata @ 0x00 >> 0xe0)]
 
+  dup1 __FUNC_SIG(foo) eq foo jumpi
+  __FUNC_SIG(bar) eq bar jumpi
+
+  0x00 0x00 revert    // no function signature matched
+
+  foo:
+    0x02 0x00 mstore 
+    0x20 0x00 return
+
+  bar:
+    0x03 0x00 mstore 
+    0x20 0x00 return
 }

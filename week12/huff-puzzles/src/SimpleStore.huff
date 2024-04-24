@@ -16,5 +16,20 @@
 
 
 #define macro MAIN() = takes(0) returns(0) {
-    
+  0x00 calldataload   // [calldata @ 0x00]
+  0xe0 shr            // [func_sig (calldata @ 0x00 >> 0xe0)]
+
+  dup1 __FUNC_SIG(read) eq read jumpi
+  __FUNC_SIG(store) eq store jumpi
+
+  0x00 0x00 revert    // no function signature matched
+
+  read:
+    0x00 sload
+    0x00 mstore
+    0x20 0x00 return
+
+  store:
+    0x04 calldataload 
+    0x00 sstore 
 }

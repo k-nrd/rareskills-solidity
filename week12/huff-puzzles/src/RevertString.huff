@@ -11,7 +11,14 @@
  *  The task is to write within the `MAIN` macro below, huff code that reverts (all the time) with the string error message `Only Huff`
 */
 
-
 #define macro MAIN() = takes(0) returns(0) {
-    
+  // Store dynamic offset of 0x20 at 0x00
+  0x20 0x00 mstore                  
+  // Store string length of 9 bytes at 0x20
+  0x09 0x20 mstore
+  // Store padded string at 0x40
+  __RIGHTPAD(0x4f6e6c792048756666) 0x40 mstore
+  
+  // Revert with 96 bytes
+  0x60 0x00 revert
 }

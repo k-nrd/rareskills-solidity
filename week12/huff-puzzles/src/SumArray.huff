@@ -1,16 +1,47 @@
-
 /** 
  *  SUM_ARRAY HUFF EXERCISE
  *
  *  
- *  The task is to write within the `MAIN` macro below, write a functionality that takes an array of uint256 as an argument and returns the sum of all the numbers
+ *  The task is to write within the `MAIN` macro below, write a function 
+ *  that takes an array of uint256 as an argument and returns the sum of all the numbers
  *
  *  NOTICE: The contract should revert when an unrecognized function is called
  */
 
 #define function sumArray(uint256[]) payable returns(uint256)
 
-
 #define macro MAIN() = takes(0) returns(0) {
+  0x00 calldataload           // [calldata @ 0x00]
+  0xe0 shr                    // [func_sig]
 
+  __FUNC_SIG(sumArray) eq
+  sum_array jumpi             
+
+  0x00 0x00 revert
+
+  sum_array:
+    0x04 calldataload         // [relative_offset]
+    0x04 add                  // [offset]
+    dup1 calldataload         // [length, offset]
+
+    0x20 mul                  // [length*32, offset]
+    dup2 add                  // [elt_ptr, offset]
+    0x00                      // [acc, ptr, offset]
+
+  loop:
+    // If ptr == offset, bail out
+    dup3                      // [offset, acc, ptr, offset]
+    dup3                      // [ptr, offset, acc, ptr, offset]
+    eq done jumpi             // [ptr==offset, acc, ptr, offset]
+
+    dup2 calldataload         // [current_elt, acc, ptr, offset] 
+    add                       // [ńew_acc, ptr, offset]
+    0x20 dup3 sub             // [new_ptr, new_acc, ptr, offset] 
+    swap2 pop                 // [new_acc, new_ptr, offset] 
+    loop jump
+
+  done:
+    swap2 pop pop             // [new_acc]
+    0x00 mstore               // Store the accumulated sum at memory position 0
+    0x20 0x00 return          // Return the 32 bytes stored at memory position 0
 }
