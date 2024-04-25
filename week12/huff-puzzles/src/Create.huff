@@ -12,9 +12,23 @@
 #define function makeContract() payable returns(address)
 
 #define table CAFFE_CODE = {
-  0x0caffe
-  0x00 mstore 
-  0x4 0x00 return
+  0x600a8060095f395ff3620caffe5f5260205ff3
+}
+
+#define macro MAKE_CONTRACT() = takes(0) returns(0) {
+  // size
+  __tablesize(CAFFE_CODE)   // [table_size]
+  __tablestart(CAFFE_CODE)  // [table_start, table_size]
+  0x00                      // [to, table_start, table_size]
+  codecopy                  // []
+
+  __tablesize(CAFFE_CODE)   // [table_size]
+  0x00
+  0x00                      // [value, offset, table_size]
+  create                    // [address]
+
+  0x00 mstore  
+  0x20 0x00 return
 }
 
 #define macro MAIN() = takes(0) returns(0) {
@@ -26,13 +40,5 @@
   0x00 0x00 revert
 
   make_contract:
-    // size
-    __codesize(CAFFE_CODE)
-    // offset
-    __codesize(CAFFE_CODE)
-    codesize 
-    sub 
-    // value
-    0x00
-    create
+    MAKE_CONTRACT()
 }
