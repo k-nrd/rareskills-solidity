@@ -12,8 +12,7 @@ contract KeccakTest is Test {
         keccak = HuffDeployer.config().deploy("Keccak");
     }
 
-    function testKeccak(bytes memory data) public 
-    {
+    function testKeccak(bytes memory data) public {
         vm.assume(data.length < 33 && data.length > 0);
         bytes32 expectedHash = keccak256(abi.encode(data));
 
