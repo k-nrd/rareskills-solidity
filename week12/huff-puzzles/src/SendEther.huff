@@ -1,4 +1,4 @@
- 
+
 /** 
  *  SEND_ETHER HUFF EXERCISE
  *  
@@ -8,9 +8,28 @@
  *  NOTICE: The contract should revert when an unrecognized function is called
  */
 
- #define function sendEther(address) payable returns()
+#define function sendEther(address) payable returns()
 
+#define macro SEND_ETHER() = takes(0) returns(0) {
+  // []
+  0x00
+  0x00
+  0x00
+  0x00
+  callvalue
+  0x04 calldataload 
+  gas                         // [gas, address, value, argsOffset, argsSize, retOffset, retSize]
+  call
+}
 
- #define macro MAIN() = takes(0) returns(0) {
-    
- }
+#define macro MAIN() = takes(0) returns(0) {
+  0x00 calldataload           // [calldata @ 0x00]
+  0xe0 shr                    // [func_sig]
+
+  __FUNC_SIG(sendEther) eq send_ether jumpi
+
+  0x00 0x00 revert
+
+  send_ether:
+    SEND_ETHER()
+}

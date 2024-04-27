@@ -11,6 +11,66 @@
 #define function balanceOf(address) payable returns(uint256)
 #define function withdraw(uint256) payable returns()
 
-#define macro MAIN() = takes(0) returns(0) {
+#define macro CALL() = takes(0) returns(0) {
+  // [address, value]
+  0x00
+  0x00
+  0x00
+  0x00                        // [0, 0, 0, 0, address, value]
+  dup6                        // [value, 0, 0, 0, 0, address, value]
+  dup6                        // [address, value, 0, 0, 0, 0, address, value]
+  gas                         // [gas, address, value, argsOffset, argsSize, retOffset, retSize, address, value]
+  call                        // [success, address, value]
+  swap2 pop pop               // [success]
+}
 
+#define macro BALANCE_OF() = takes(0) returns(0) {
+  0x04 calldataload           // [address]
+  sload                       // [balance]
+  0x00 mstore
+  0x20 0x00 return
+}
+
+#define macro WITHDRAW() = takes(0) returns(0) {
+  0x04 calldataload         // [value]
+  caller sload              // [balance, value]
+  dup1 dup3                 // [value, balance, balance, value]
+  gt fail jumpi             // fail if value>balance [value>balance, balance, value]
+
+  dup2 dup2                 // [balance, value, balance, value]
+  sub                       // [new_balance, old_balance, value]
+  swap1 dup2                // [new_balance, old_balance, new_balance, value]
+  gt fail jumpi             // fail if new_balance>old_balance [new_balance, value]
+  caller sstore             // store(address, new_balance) [value]
+
+  caller                    // [address, value]
+  CALL()
+  iszero fail jumpi         // [success==0?]
+
+  0x00 0x00 return
+
+  fail:
+    0x00 0x00 revert
+}
+
+#define macro DEPOSIT() = takes(0) returns(0) {
+  callvalue                   // [value]
+  caller                      // [address, value]
+  sstore                      // []
+  0x00 0x00 return
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+  0x00 calldataload           // [calldata @ 0x00]
+  0xe0 shr                    // [func_sig]
+
+  dup1 __FUNC_SIG(balanceOf) eq balance_of jumpi
+  __FUNC_SIG(withdraw) eq withdraw jumpi
+
+  DEPOSIT()
+
+  balance_of:
+    BALANCE_OF()
+  withdraw:
+    WITHDRAW()
 }

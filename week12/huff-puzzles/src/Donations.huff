@@ -8,5 +8,15 @@
 #define function donated(address) payable returns(uint256)
 
 #define macro MAIN() = takes(0) returns(0) {
-    
+  0x00 calldataload           // [calldata @ 0x00]
+  0xe0 shr                    // [func_sig]
+
+  __FUNC_SIG(donated) eq donated jumpi
+
+  0x00 0x00 return
+
+  donated:
+    selfbalance 
+    0x00 mstore
+    0x20 0x00 return
 }
