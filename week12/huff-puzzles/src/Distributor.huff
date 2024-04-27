@@ -1,4 +1,4 @@
- 
+
 /** 
  *  DISTRIBUTE HUFF EXERCISE
  *  
@@ -10,9 +10,61 @@
  *  NOTICE: The contract should revert when an unrecognized function is called
  */
 
- #define function distribute(address[]) payable returns()
+#define function distribute(address[]) payable returns()
 
+#define macro SEND_ETHER() = takes(0) returns(0) {
+  // [address, value, _]
+  0x00
+  0x00
+  0x00
+  0x00                        // [0, 0, 0, 0, address, value, _]
+  dup6 dup6                   // [address, value, 0, 0, 0, 0, address, value, _] 
+  0x960                       // [2400 gas, address, value, argsOffset, argsSize, retOffset, retSize, address, value, _]
+  call                        // [success, address, value, _]
+  swap1 pop                   // [success, value, _]
+}
 
- #define macro MAIN() = takes(0) returns(0) {
-   
- }
+#define macro DISTRIBUTE() = takes(0) returns(0) {
+  // prepare loop
+  0x04 calldataload         // [relative_offset]
+  0x04 add                  // [offset]
+  dup1 calldataload         // [length, offset]
+  dup1 iszero fail jumpi    // revert if length is zero [length, offset]
+
+  dup1 0x20 mul             // [length*32, length, offset]
+  dup3 add                  // [ptr, length, offset]
+  swap1                     // [length, ptr, offset]
+  callvalue                 // [value, length, ptr, offset]
+  div                       // [value/length, ptr, offset]
+
+  loop:
+    // [shares, ptr, offset]
+    // If ptr == offset, bail out
+    dup3 dup3 eq done jumpi   // [ptr==offset, shares, ptr, offset]
+    dup2 calldataload         // [current_addr_padded, shares, ptr, offset] 
+    SEND_ETHER()              // [success, shares, ptr, offset]
+    pop
+    // iszero fail jumpi      // revert if didn't succeed [shares, ptr, offset]
+    0x20 dup3 sub             // [new_ptr, shares, ptr, offset] 
+    swap2 pop                 // [shares, new_ptr, offset] 
+    loop jump
+
+  done:
+    0x00 mstore               // Store the accumulated sum at memory position 0
+    0x20 0x00 return          // Return the 32 bytes stored at memory position 0
+
+  fail:
+    0x00 0x00 revert
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+  0x00 calldataload           // [calldata @ 0x00]
+  0xe0 shr                    // [func_sig]
+
+  __FUNC_SIG(distribute) eq distribute jumpi
+
+  0x00 0x00 revert
+
+  distribute:
+    DISTRIBUTE()
+}

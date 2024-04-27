@@ -14,8 +14,7 @@
 #define error OnlyHuff()
 
 #define macro MAIN() = takes(0) returns(0) {
-  0x00 __ERROR(OnlyHuff)  // [panic_error_selector, panic_code]
-  0x00 mstore             // [panic_code]
-  0x04 mstore             // []
-  0x24 0x00 revert
+  __ERROR(OnlyHuff)   // [panic_error_selector]
+  0x00 mstore         // []
+  0x04 0x00 revert
 }
