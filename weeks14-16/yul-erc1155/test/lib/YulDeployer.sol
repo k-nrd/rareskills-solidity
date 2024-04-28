@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
-import "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
 
 contract YulDeployer is Test {
     ///@notice Compiles a Yul contract and returns the address that the contract was deployed to

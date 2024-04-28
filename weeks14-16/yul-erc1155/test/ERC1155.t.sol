@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
+import {IERC1155} from "@openzeppelin/contracts/interfaces/IERC1155.sol";
 import {ERC1155TokenReceiver} from "solmate/tokens/ERC1155.sol";
 import {Test} from "forge-std/Test.sol";
 import {YulDeployer} from "./lib/YulDeployer.sol";
@@ -9,7 +10,7 @@ import {RevertingERC1155Recipient} from "./erc1155-helpers/ERC1155RevertingRecip
 import {WrongReturnDataERC1155Recipient} from "./erc1155-helpers/ERC1155WrongReturnDataRecipient.sol";
 import {NonERC1155Recipient} from "./erc1155-helpers/ERC1155NonRecipient.sol";
 
-interface ERC1155 {}
+interface ERC1155 is IERC1155 {}
 
 contract ERC1155Test is Test, ERC1155TokenReceiver {
     YulDeployer yulDeployer = new YulDeployer();
