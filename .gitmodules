@@ -85,3 +85,6 @@
 [submodule "weeks14-16/yul-erc1155/lib/solmate"]
 	path = weeks14-16/yul-erc1155/lib/solmate
 	url = https://github.com/transmissions11/solmate
+[submodule "weeks14-16/yul-erc1155/lib/openzeppelin-contracts"]
+	path = weeks14-16/yul-erc1155/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
