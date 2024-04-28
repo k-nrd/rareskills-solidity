@@ -1,16 +1,18 @@
-object "_Template" {
+object "ERC1155Token" {
   code {
     // YOUR CUSTOM CONSTRUCTOR LOGIC GOES HERE
 
     // copy all runtime code to memory
-    datacopy(0, dataoffset("Runtime"), datasize("Runtime"))
+    datacopy(0, dataoffset("runtime"), datasize("runtime"))
 
     // return code to be deployed
-    return(0, datasize("Runtime"))
+    return(0, datasize("runtime"))
   }
-  object "Runtime" {
+  object "runtime" {
     code {
       // YOUR CODE GOES HERE
+      //
+      function mint() {}
     }
   }
 }

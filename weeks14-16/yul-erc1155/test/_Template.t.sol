@@ -15,7 +15,5 @@ contract _TemplateTest is Test {
         template = _Template(yulDeployer.deployContract("_Template"));
     }
 
-    function test__Template() public {
-
-    }
+    function test__Template() public {}
 }
