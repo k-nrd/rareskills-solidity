@@ -10,9 +10,6 @@ object "ERC1155Token" {
   }
   object "runtime" {
     code {
-      switch selector() {
-          case 
-        }
       function mint() {}
     }
   }
