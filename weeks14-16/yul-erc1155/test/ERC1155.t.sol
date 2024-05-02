@@ -15,6 +15,7 @@ interface ERC1155 is IERC1155 {
     function batchMint(address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data) external;
     function burn(address from, uint256 id, uint256 amount) external;
     function batchBurn(address from, uint256[] memory ids, uint256[] memory amounts) external;
+    function uri(uint256) external pure returns (string memory);
 }
 
 contract ERC1155Test is Test, ERC1155TokenReceiver {
