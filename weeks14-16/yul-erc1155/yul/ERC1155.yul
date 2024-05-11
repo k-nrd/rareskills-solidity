@@ -43,7 +43,11 @@ object "ERC1155" {
           calldatacopy(add(ptr, 0xa4), dataStart, dataSize)
 
           // calling onERC1155Received(address,address,uint256,uint256,bytes)
-          if iszero(callERC1155Receiver(recipient, ptr, ptr, add(dataSize, 0xa4))) {
+          let success := call(gas(), recipient, 0, ptr, add(dataSize, 0xa4), ptr, 0x20)
+          if or(
+            iszero(success), 
+            iszero(eq(mload(ptr), shl(0xe0, 0xf23a6e61)))
+          ) {
             revert(0x00, 0x00)
           }
         }
@@ -266,23 +270,21 @@ object "ERC1155" {
 
       /* Events */
       function emitTransferSingle(operator, from, to, id, amount) {
-        let signatureHash := 0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62
-        let ptr := freePtr()
-        mstore(ptr, id)
-        mstore(add(ptr, 0x20), amount)
-        log4(ptr, 0x40, signatureHash, operator, from, to)
+        mstore(0x00, id)
+        mstore(0x20, amount)
+        log4(
+          0x00, 
+          0x40, 
+          0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62, 
+          operator, 
+          from, 
+          to
+        )
       }
 
 
       /* Calls */
       function callERC1155Receiver(addr, ptr, returnPtr, dataSize) -> success {
-        success := call(gas(), addr, 0, ptr, dataSize, returnPtr, 0x20)
-        if or(
-          iszero(success), 
-          iszero(eq(mload(returnPtr), shl(0xe0, 0xf23a6e61)))
-        ) {
-          revert(0, 0)
-        }
       }
 
 
