@@ -10,36 +10,142 @@ object "ERC1155" {
   }
   object "runtime" {
     code {
-      let selector := shr(0xe0, calldataload(0))
-
-      switch selector 
+      switch shr(0xe0, calldataload(0x00)) 
       // mint(address,uint256,uint256,bytes)
-      case /*0x731133e9*/ 0x54ff8b82 {
+      case 0x731133e9 {
+        let recipient := calldataload(0x04)
+        let id := calldataload(0x24)
+        let amount := calldataload(0x44)
+
+        let balSlot := balanceOfSlot(recipient, id)
+        let bal := sload(balSlot)
+        sstore(balSlot, add(amount, bal))
+
+        // Recipient is a contract, must be ERC1155Recipient
+        if iszero(iszero(extcodesize(recipient))) {
+          // Load remaining argument
+          let dataOffset := calldataload(0x64)
+
+          let ptr := mload(0x40)
+          // Store function selector
+          mstore(ptr, shl(0xe0, 0xf23a6e61))
+          // Store fixed-size parameters (caller, from, id, amount)
+          mstore(add(ptr, 0x04), caller())
+          mstore(add(ptr, 0x24), 0x00)
+          mstore(add(ptr, 0x44), id)
+          mstore(add(ptr, 0x64), amount)
+          // Store offset to bytes data 
+          mstore(add(ptr, 0x84), 0xa0)
+
+          // Copy bytes length and elements into memory
+          let dataStart := add(dataOffset, 0x04)
+          let dataSize := sub(calldatasize(), dataStart)
+          calldatacopy(add(ptr, 0xa4), dataStart, dataSize)
+
+          // calling onERC1155Received(address,address,uint256,uint256,bytes)
+          if iszero(callERC1155Receiver(recipient, ptr, ptr, add(dataSize, 0xa4))) {
+            revert(0x00, 0x00)
+          }
+        }
+
+        emitTransferSingle(caller(), 0x00, recipient, id, amount)
+      }
+      // batchMint(address,uint256[], uint256[], bytes)
+      case 0xb48ab8b6 {
+        let recipient := calldataload(0x04)
+
+        let idsStart := add(calldataload(0x24), 0x04)
+        let idsLength := calldataload(idsStart)
+
+        let amountsStart := add(calldataload(0x44), 0x04)
+        let amountsLength := calldataload(amountsStart)
+
+        // ids and amounts length must match
+        if iszero(eq(idsLength, amountsLength)) {
+          revert(0x00, 0x00)
+        }
+
+        for { let i := 0 } lt(i, idsLength) { i := add(i, 0x01) } {
+          let index := add(0x20, mul(i, 0x20))
+          let amount := calldataload(add(amountsStart, index))
+          let balSlot := balanceOfSlot(recipient, calldataload(add(idsStart, index)))
+          let bal := sload(balSlot)
+          sstore(balSlot, add(bal, amount))
+        }
+
+        if iszero(iszero(extcodesize(recipient))) {
+          // Load remaining argument
+          let dataStart := add(calldataload(0x64), 0x04)
+          let dataLength := calldataload(dataStart)
+
+          let ptr := mload(0x40)
+          // Store function selector
+          mstore(ptr, shl(0xe0, 0xbc197c81))
+          // Store fixed-size parameters (caller, from, id, amount)
+          mstore(add(ptr, 0x04), caller())
+          mstore(add(ptr, 0x24), 0x00)
+
+          // Store array offsets
+          mstore(add(ptr, 0x44), 0xa0)
+          mstore(add(ptr, 0x64), add(0xa0, add(mul(idsLength, 0x20), 0x20)))
+          mstore(add(ptr, 0x84), add(add(0xa0, add(mul(idsLength, 0x20), 0x20)), add(mul(amountsLength, 0x20), 0x20)))
+
+          // Copy IDs length and elements
+          mstore(add(ptr, 0xa4), idsLength)
+          calldatacopy(add(ptr, 0xc4), idsStart, mul(idsLength, 0x20))
+          // Copy amounts length and elements
+          mstore(add(ptr, add(0xc4, mul(idsLength, 0x20))), amountsLength)
+          calldatacopy(add(ptr, add(0xe4, mul(idsLength, 0x20))), amountsStart, mul(amountsLength, 0x20))
+          // Copy data length and elements
+          mstore(add(ptr, add(add(0xe4, mul(idsLength, 0x20)), mul(amountsLength, 0x20))), dataLength)
+          calldatacopy(add(ptr, add(add(0x104, mul(idsLength, 0x20)), mul(amountsLength, 0x20))), dataStart, dataLength)
+
+          let success := call(
+            gas(), 
+            recipient, 
+            0, 
+            ptr, 
+            add(add(add(0x104, mul(idsLength, 0x20)), mul(amountsLength, 0x20)), dataLength), 
+            ptr, 
+            0x20
+          )
+
+          if or(
+            iszero(success),
+            iszero(eq(mload(ptr), shl(0xe0, 0xbc197c81)))
+          ) {
+            revert(0x00, 0x00)
+          }
+        }
+
+//        emitTransferBatch(caller(), 0x00, recipient)
+      }
+      // burn(address,uint256,uint256)
+      case 0xf5298aca {
         let addr := calldataload(0x04)
         let id := calldataload(0x24)
         let amount := calldataload(0x44)
 
-        let balOffset := balancesAccountToBalanceSlot(addr, id)
+        let balOffset := balanceOfSlot(addr, id)
         let bal := sload(balOffset)
-        sstore(balOffset, add(amount, bal))
+        if lt(bal, amount) {
+          revert(0x00, 0x00)
+        }
+        sstore(balOffset, sub(bal, amount))
 
-        emitTransferSingle(caller(), 0x0, addr, id, amount)
-
-        mstore(0x00, 0x01)
-        return(0x00, 0x20)
-      }
-      // batchMint(address,uint256[], uint256[], bytes)
-      case 0xb48ab8b6 {
-        mstore(0x00, 0x01)
-        return(0x00, 0x20)
-      }
-      // burn(address,uint256,uint256)
-      case 0xf5298aca {
-        mstore(0x00, 0x01)
-        return(0x00, 0x20)
+        emitTransferSingle(caller(), addr, 0x0, id, amount)
       }
       // batchBurn(address,uint256[],uint256[])
       case 0xf6eb127a {
+        let addr:= calldataload(0x04)
+
+        let idsOffset := calldataload(0x24)
+        let idsLength := calldataload(add(0x04, idsOffset))
+
+        let amountsOffset := calldataload(0x44) 
+        let amountsLength := calldataload(add(0x04, amountsOffset))
+
+        // for {} {} {}
         mstore(0x00, 0x01)
         return(0x00, 0x20)
       }
@@ -57,8 +163,22 @@ object "ERC1155" {
       }
       // safeTransferFrom(address,address,uint256,uint256,bytes)
       case 0xf242432a {
-        mstore(0x00, 0x01)
-        return(0x00, 0x20)
+        let fromAddr := calldataload(0x04)
+        let toAddr := calldataload(0x24)
+        let id := calldataload(0x44)
+        let amount := calldataload(0x64)
+
+        let fromBalSlot := balanceOfSlot(fromAddr, id)
+        let fromBal := sload(fromBalSlot)
+        if lt(fromBal, amount) {
+          revert(0x00, 0x00)
+        }
+
+        let toBalSlot := balanceOfSlot(toAddr, id)
+        let toBal := sload(toBalSlot)
+        
+        sstore(fromBalSlot, sub(fromBal, amount))
+        sstore(toBalSlot, add(toBal, amount))
       }
       // safeBatchTransferFrom(address,address,uint256[],uint256[],bytes)
       case 0x2eb2c2d6 {
@@ -67,22 +187,37 @@ object "ERC1155" {
       }
       // balanceOf(address,uint256)
       case 0x00fdd58e {
-        mstore(0x00, balanceOf(calldataload(0x04), calldataload(0x24)) )
+        let account := calldataload(0x04)
+        let id := calldataload(0x24)
+
+        mstore(0x00, balanceOf(account, id))
         return(0x00, 0x20)
       }
       // balanceOfBatch(address[],uint256[])
       case 0x4e1273f4 {
+        let addrsOffset := calldataload(0x04)
+        let addrsLength := calldataload(add(0x04, addrsOffset))
+
+        let idsOffset := calldataload(0x24)
+        let idsLength := calldataload(add(0x04, idsOffset))
+
         mstore(0x00, 0x01)
         return(0x00, 0x20)
       }
       // setApprovalForAll(address,bool)
-      case 0xa22cb465 {
-        mstore(0x00, 0x01)
-        return(0x00, 0x20)
+      case 0xb697a0c4 {
+        let operator := calldataload(0x04) 
+        let approved := calldataload(0x24)
+
+        let approvalOffset := isApprovedForAllSlot(caller(), operator)
+        sstore(approvalOffset, approved)
       }
-      // isApprovedForAll(address,bool)
-      case 0x9d11d120 {
-        mstore(0x00, 0x01)
+      // isApprovedForAll(address,address)
+      case 0xe985e9c5 {
+        let account := calldataload(0x04)
+        let operator := calldataload(0x24) 
+
+        mstore(0x00, isApproved(account, operator))
         return(0x00, 0x20)
       }
       // supportsInterface()
@@ -92,30 +227,24 @@ object "ERC1155" {
       }
       default {
         mstore(0x00, 0x01)
-        revert(0x00,0x20)
+        revert(0x00, 0x20)
       }
 
       /* Storage layout */
       function balancesSlot() -> s {
-        s := 0
-      }
-      function balancesIdToAccountsSlot(id) -> s {
-        s := mapping(balancesSlot(), id)
-      }
-      function balancesAccountToBalanceSlot(account, id) -> s {
-        s := mapping(balancesIdToAccountsSlot(id), account)
-      } 
-      function approvalsSlot() -> s {
         s := 1
       }
-      function approvalsAccountToOperatorSlot(account) -> s {
-        s := mapping(approvalsSlot(), account)
+      function balanceOfSlot(account, id) -> s {
+        s := mapping(mapping(balancesSlot(), id), account)
+      } 
+      function approvalsSlot() -> s {
+        s := 2
       }
-      function approvalsOperatorToApprovalSlot(operator, account) -> s {
-        s := mapping(approvalsAccountToOperatorSlot(account), operator)
+      function isApprovedForAllSlot(account, operator) -> s {
+        s := mapping(mapping(approvalsSlot(), account), operator)
       } 
       function uriSlot() -> s { 
-        s := 2
+        s := 3
       }
       function uriIdToString(id) -> s {
         s := mapping(uriSlot(), id)
@@ -123,7 +252,10 @@ object "ERC1155" {
 
       /* Storage access */
       function balanceOf(account, id) -> bal {
-        bal := sload(balancesAccountToBalanceSlot(account, id))
+        bal := sload(balanceOfSlot(account, id))
+      }
+      function isApproved(account, operator) -> approval {
+        approval := sload(isApprovedForAllSlot(account, account))
       }
       function uriLength(id) -> len {
         len := sload(uriIdToString(id))
@@ -135,16 +267,33 @@ object "ERC1155" {
       /* Events */
       function emitTransferSingle(operator, from, to, id, amount) {
         let signatureHash := 0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62
-        mstore(0x00, id)
-        mstore(0x20, amount)
-        log4(0x00, 0x40, signatureHash, operator, from, to)
+        let ptr := freePtr()
+        mstore(ptr, id)
+        mstore(add(ptr, 0x20), amount)
+        log4(ptr, 0x40, signatureHash, operator, from, to)
       }
 
+
+      /* Calls */
+      function callERC1155Receiver(addr, ptr, returnPtr, dataSize) -> success {
+        success := call(gas(), addr, 0, ptr, dataSize, returnPtr, 0x20)
+        if or(
+          iszero(success), 
+          iszero(eq(mload(returnPtr), shl(0xe0, 0xf23a6e61)))
+        ) {
+          revert(0, 0)
+        }
+      }
+
+
       /* Utils */
-      function mapping(initialOffset, argument) -> offset {
-        mstore(0x00, initialOffset)
+      function freePtr() -> ptr {
+        ptr := mload(0x40)
+      }
+      function mapping(initialSlot, argument) -> slot {
+        mstore(0x00, initialSlot)
         mstore(0x20, argument)
-        offset := keccak256(0x00, 0x40)
+        slot := keccak256(0x00, 0x40)
       }
     }
   }
