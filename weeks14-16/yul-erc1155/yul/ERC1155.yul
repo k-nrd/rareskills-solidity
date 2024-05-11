@@ -122,7 +122,7 @@ object "ERC1155" {
           }
         }
 
-//        emitTransferBatch(caller(), 0x00, recipient)
+        emitTransferBatch(caller(), 0x00, recipient, idsStart, amountsStart, idsLength) 
       }
       // burn(address,uint256,uint256)
       case 0xf5298aca {
@@ -273,25 +273,38 @@ object "ERC1155" {
         mstore(0x00, id)
         mstore(0x20, amount)
         log4(
-          0x00, 
-          0x40, 
-          0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62, 
-          operator, 
-          from, 
+          0x00,
+          0x40,
+          0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62,
+          operator,
+          from,
+          to
+        )
+      }
+      function emitTransferBatch(operator, from, to, idsPtr, amountsPtr, length) {
+        let basePtr := 0xff
+        let size := mul(length, 0x20)
+
+        let idsOffset := 0x40
+        let amountsOffset := add(idsOffset, add(size, 0x20))
+        mstore(basePtr, idsOffset)                             // store offset to id data
+        mstore(add(basePtr, 0x20), amountsOffset)              // store offset to amount data
+        mstore(add(basePtr, idsOffset), length)                              // store ids length
+        mstore(add(basePtr, amountsOffset), length)                           // store ampunts length
+        calldatacopy(add(basePtr, idsOffset), add(idsPtr, 0x20), length)
+        calldatacopy(add(basePtr, amountsOffset), add(amountsOffset, 0x20), length)
+
+        log4(
+          basePtr,
+          add(amountsOffset, add(size, 0x20)),
+          0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb,
+          operator,
+          from,
           to
         )
       }
 
-
-      /* Calls */
-      function callERC1155Receiver(addr, ptr, returnPtr, dataSize) -> success {
-      }
-
-
       /* Utils */
-      function freePtr() -> ptr {
-        ptr := mload(0x40)
-      }
       function mapping(initialSlot, argument) -> slot {
         mstore(0x00, initialSlot)
         mstore(0x20, argument)
