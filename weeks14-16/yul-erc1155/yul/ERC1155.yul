@@ -92,11 +92,30 @@ object "ERC1155" {
       }
       // uri(uint256)
       case 0x0e89341c {
-        let id := calldataload(0x04)
+        let uriLength := baseUriLength()
+        let uriData := baseUriData()
+
         mstore(0x00, 0x20)
-        mstore(0x20, uriLength(id))
-        mstore(0x40, uriData(id))
+        mstore(0x20, uriLength)
+        mstore(0x40, uriData)
         return(0x00, 0x60)
+      }
+      // setURI(string)
+      case 0x02fe5305 {
+        let uriStart := add(calldataload(0x04), 0x04)
+        let uriLength := calldataload(uriStart)
+        sstore(uriSlot(), uriLength)
+
+        let slot := add(uriSlot(), 0x20)
+        for { let i := 0 } lt(i, uriLength) { 
+          i := add(i, 0x01) 
+          slot := add(slot, 0x20)
+        } {
+          let index := add(0x20, mul(i, 0x20))
+          let content := calldataload(add(uriStart, index))
+          sstore(slot, content)
+        }
+        emitURI()
       }
       // safeTransferFrom(address,address,uint256,uint256,bytes)
       case 0xf242432a {
@@ -209,7 +228,7 @@ object "ERC1155" {
       }
       // supportsInterface()
       case 0x585582fb {
-        mstore(0x00, 0x01)
+        mstore(0x00, or(0x0e89341c, 0xd9b67a26))
         return(0x00, 0x20)
       }
       default {
@@ -232,9 +251,6 @@ object "ERC1155" {
       function uriSlot() -> s { 
         s := 2
       }
-      function uriIdToString(id) -> s {
-        s := mapping(uriSlot(), id)
-      }
 
       /* Storage access */
       function balanceOf(account, id) -> bal {
@@ -243,11 +259,11 @@ object "ERC1155" {
       function isApproved(account, operator) -> approval {
         approval := sload(isApprovedForAllSlot(account, operator))
       }
-      function uriLength(id) -> len {
-        len := sload(uriIdToString(id))
+      function baseUriLength() -> len {
+        len := sload(uriSlot())
       }
-      function uriData(id) -> data {
-        data := sload(add(0x20, uriIdToString(id)))
+      function baseUriData() -> uri {
+        uri := sload(add(uriSlot(), 0x20))    
       }
 
       /* Events */
@@ -296,8 +312,6 @@ object "ERC1155" {
       /* Effects */
       function callOnERC1155Received(recipient, operator, from, id, amount, dataStart) {
         let selector := shl(0xe0, 0xf23a6e61)
-        // Calculate sizes
-        let dataSize := sub(calldatasize(), dataStart)
         // Store function selector
         mstore(0x00, selector)
         // Store fixed-size parameters (caller, from, id, amount)
@@ -308,9 +322,9 @@ object "ERC1155" {
         // Store offset to bytes data 
         mstore(0x84, 0xa0)
         // Copy bytes length and elements into memory
-        calldatacopy(0xa4, dataStart, dataSize)
+        calldatacopy(0xa4, dataStart, sub(calldatasize(), dataStart))
         // calling onERC1155Received(address,address,uint256,uint256,bytes)
-        let success := call(gas(), recipient, 0, 0x00, add(dataSize, 0xa4), 0x00, 0x20)
+        let success := call(gas(), recipient, 0x00, 0x00, add(calldatasize(), 0x20), 0x00, 0x20)
         if or(
           iszero(success), 
           iszero(eq(mload(0x00), selector))
@@ -323,7 +337,7 @@ object "ERC1155" {
         // Calculate sizes
         let idsSize := mul(0x20, calldataload(idsStart)) 
         let amountsSize := mul(0x20, calldataload(amountsStart))
-        let dataSize := sub(calldatasize(), dataStart)
+        let dataSize := mul(0x20, calldataload(dataStart))
         // Store function selector
         mstore(0x00, selector)
         // Store fixed-size parameters (caller, from, id, amount)
@@ -331,20 +345,12 @@ object "ERC1155" {
         mstore(0x24, from)
         // Store array offsets
         mstore(0x44, 0xa0)
-        mstore(0x64, add(0xa0, add(idsSize, 0x20)))
-        mstore(0x84, add(add(0xa0, add(idsSize, 0x20)), add(amountsSize, 0x20)))
-        // Copy IDs length and elements
-        mstore(0xa4, calldataload(idsStart))
-        calldatacopy(0xc4, idsStart, idsSize)
-        // Copy amounts length and elements
-        mstore(add(0xc4, idsSize), calldataload(amountsStart))
-        calldatacopy(add(0xe4, idsSize), amountsStart, amountsSize)
-        // Copy data length and elements
-        mstore(add(add(0xe4, idsSize), amountsSize), calldataload(dataStart))
-        calldatacopy(add(add(0x104, idsSize), amountsSize), dataStart, dataSize)
+        mstore(0x64, add(0xc0, idsSize))
+        mstore(0x84, add(0xe0, mul(idsSize, 0x02)))
+        // Copy everything after idsStart
+        calldatacopy(0xa4, idsStart, sub(calldatasize(), idsStart))
         // calling onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)
-        let totalSize := add(add(add(0x104, idsSize), amountsSize), dataSize)
-        let success := call(gas(), recipient, 0, 0x00, totalSize, 0x00, 0x20)
+        let success := call(gas(), recipient, 0x00, 0x00, add(calldatasize(), 0x20), 0x00, 0x20)
         if or(
           iszero(success),
           iszero(eq(mload(0x00), selector))

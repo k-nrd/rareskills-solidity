@@ -16,6 +16,7 @@ interface ERC1155 is IERC1155 {
     function burn(address from, uint256 id, uint256 amount) external;
     function batchBurn(address from, uint256[] memory ids, uint256[] memory amounts) external;
     function uri(uint256) external pure returns (string memory);
+    function setURI(string memory uri) external;
 }
 
 contract ERC1155Test is Test, ERC1155TokenReceiver {
@@ -27,6 +28,12 @@ contract ERC1155Test is Test, ERC1155TokenReceiver {
 
     function setUp() public {
         token = ERC1155(yulDeployer.deployContract("ERC1155"));
+    }
+
+    function testSetURI() public {
+        assertBytesEq(bytes(token.uri(1)), "");
+        token.setURI("http://localhost/");
+        assertBytesEq(bytes(token.uri(1)), "http://localhost/");
     }
 
     function testMintToEOA() public {
