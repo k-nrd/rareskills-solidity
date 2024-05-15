@@ -91,3 +91,6 @@
 [submodule "week17/synthetix/lib/forge-std"]
 	path = week17/synthetix/lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
+[submodule "week17/synthetix/lib/openzeppelin-contracts"]
+	path = week17/synthetix/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
