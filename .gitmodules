@@ -1,0 +1,3 @@
+[submodule "7 - Yul ERC1155/yul-erc1155/lib/solmate"]
+	path = 7 - Yul ERC1155/yul-erc1155/lib/solmate
+	url = https://github.com/transmissions11/solmate
