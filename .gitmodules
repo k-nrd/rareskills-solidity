@@ -1,0 +1,3 @@
+[submodule "9 - DelegateCall and Proxies/ethernaut/preservation/lib/forge-std"]
+	path = 9 - DelegateCall and Proxies/ethernaut/preservation/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
