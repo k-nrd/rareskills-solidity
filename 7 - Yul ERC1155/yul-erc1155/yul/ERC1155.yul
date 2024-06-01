@@ -13,6 +13,7 @@ object "ERC1155" {
       switch shr(0xe0, calldataload(0x00)) 
       // mint(address,uint256,uint256,bytes)
       case 0x731133e9 {
+        // TODO: Parse incoming addresses by shifting left and right
         let recipient := calldataload(0x04)
         if iszero(recipient) {
           revert(0x00, 0x00)
