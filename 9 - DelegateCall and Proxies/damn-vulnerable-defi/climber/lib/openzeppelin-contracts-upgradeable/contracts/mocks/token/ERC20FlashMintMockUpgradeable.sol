@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
-import "../../token/ERC20/extensions/ERC20FlashMintUpgradeable.sol";
+import {ERC20FlashMintUpgradeable} from "../../token/ERC20/extensions/ERC20FlashMintUpgradeable.sol";
 import {Initializable} from "../../proxy/utils/Initializable.sol";
 
 abstract contract ERC20FlashMintMockUpgradeable is Initializable, ERC20FlashMintUpgradeable {
@@ -29,11 +29,4 @@ abstract contract ERC20FlashMintMockUpgradeable is Initializable, ERC20FlashMint
     function _flashFeeReceiver() internal view override returns (address) {
         return _flashFeeReceiverAddress;
     }
-
-    /**
-     * @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-    uint256[48] private __gap;
 }

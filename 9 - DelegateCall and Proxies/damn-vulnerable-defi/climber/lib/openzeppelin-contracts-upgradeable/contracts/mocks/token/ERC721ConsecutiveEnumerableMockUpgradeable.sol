@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
-import "../../token/ERC721/extensions/ERC721ConsecutiveUpgradeable.sol";
-import "../../token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
+import {ERC721Upgradeable} from "../../token/ERC721/ERC721Upgradeable.sol";
+import {ERC721ConsecutiveUpgradeable} from "../../token/ERC721/extensions/ERC721ConsecutiveUpgradeable.sol";
+import {ERC721EnumerableUpgradeable} from "../../token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 import {Initializable} from "../../proxy/utils/Initializable.sol";
 
 contract ERC721ConsecutiveEnumerableMockUpgradeable is Initializable, ERC721ConsecutiveUpgradeable, ERC721EnumerableUpgradeable {
@@ -38,32 +39,15 @@ contract ERC721ConsecutiveEnumerableMockUpgradeable is Initializable, ERC721Cons
         return super._ownerOf(tokenId);
     }
 
-    function _mint(address to, uint256 tokenId) internal virtual override(ERC721Upgradeable, ERC721ConsecutiveUpgradeable) {
-        super._mint(to, tokenId);
-    }
-
-    function _beforeTokenTransfer(
-        address from,
+    function _update(
         address to,
-        uint256 firstTokenId,
-        uint256 batchSize
-    ) internal virtual override(ERC721Upgradeable, ERC721EnumerableUpgradeable) {
-        super._beforeTokenTransfer(from, to, firstTokenId, batchSize);
+        uint256 tokenId,
+        address auth
+    ) internal virtual override(ERC721ConsecutiveUpgradeable, ERC721EnumerableUpgradeable) returns (address) {
+        return super._update(to, tokenId, auth);
     }
 
-    function _afterTokenTransfer(
-        address from,
-        address to,
-        uint256 firstTokenId,
-        uint256 batchSize
-    ) internal virtual override(ERC721Upgradeable, ERC721ConsecutiveUpgradeable) {
-        super._afterTokenTransfer(from, to, firstTokenId, batchSize);
+    function _increaseBalance(address account, uint128 amount) internal virtual override(ERC721Upgradeable, ERC721EnumerableUpgradeable) {
+        super._increaseBalance(account, amount);
     }
-
-    /**
-     * @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-    uint256[50] private __gap;
 }

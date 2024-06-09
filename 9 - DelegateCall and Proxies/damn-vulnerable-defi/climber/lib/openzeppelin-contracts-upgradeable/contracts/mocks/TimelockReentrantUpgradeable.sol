@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
-import "../utils/AddressUpgradeable.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {Initializable} from "../proxy/utils/Initializable.sol";
 
 contract TimelockReentrantUpgradeable is Initializable {
@@ -26,14 +26,7 @@ contract TimelockReentrantUpgradeable is Initializable {
     function reenter() external {
         if (!_reentered) {
             _reentered = true;
-            AddressUpgradeable.functionCall(_reenterTarget, _reenterData);
+            Address.functionCall(_reenterTarget, _reenterData);
         }
     }
-
-    /**
-     * @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-    uint256[47] private __gap;
 }

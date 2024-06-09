@@ -1,20 +1,33 @@
 // SPDX-License-Identifier: MIT
-// OpenZeppelin Contracts (last updated v4.9.0) (governance/extensions/GovernorSettings.sol)
+// OpenZeppelin Contracts (last updated v5.0.0) (governance/extensions/GovernorSettings.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
-import "../GovernorUpgradeable.sol";
+import {GovernorUpgradeable} from "../GovernorUpgradeable.sol";
 import {Initializable} from "../../proxy/utils/Initializable.sol";
 
 /**
  * @dev Extension of {Governor} for settings updatable through governance.
- *
- * _Available since v4.4._
  */
 abstract contract GovernorSettingsUpgradeable is Initializable, GovernorUpgradeable {
-    uint256 private _votingDelay;
-    uint256 private _votingPeriod;
-    uint256 private _proposalThreshold;
+    /// @custom:storage-location erc7201:openzeppelin.storage.GovernorSettings
+    struct GovernorSettingsStorage {
+        // amount of token
+        uint256 _proposalThreshold;
+        // timepoint: limited to uint48 in core (same as clock() type)
+        uint48 _votingDelay;
+        // duration: limited to uint32 in core
+        uint32 _votingPeriod;
+    }
+
+    // keccak256(abi.encode(uint256(keccak256("openzeppelin.storage.GovernorSettings")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant GovernorSettingsStorageLocation = 0x00d7616c8fe29c6c2fbe1d0c5bc8f2faa4c35b43746e70b24b4d532752affd00;
+
+    function _getGovernorSettingsStorage() private pure returns (GovernorSettingsStorage storage $) {
+        assembly {
+            $.slot := GovernorSettingsStorageLocation
+        }
+    }
 
     event VotingDelaySet(uint256 oldVotingDelay, uint256 newVotingDelay);
     event VotingPeriodSet(uint256 oldVotingPeriod, uint256 newVotingPeriod);
@@ -23,11 +36,11 @@ abstract contract GovernorSettingsUpgradeable is Initializable, GovernorUpgradea
     /**
      * @dev Initialize the governance parameters.
      */
-    function __GovernorSettings_init(uint256 initialVotingDelay, uint256 initialVotingPeriod, uint256 initialProposalThreshold) internal onlyInitializing {
+    function __GovernorSettings_init(uint48 initialVotingDelay, uint32 initialVotingPeriod, uint256 initialProposalThreshold) internal onlyInitializing {
         __GovernorSettings_init_unchained(initialVotingDelay, initialVotingPeriod, initialProposalThreshold);
     }
 
-    function __GovernorSettings_init_unchained(uint256 initialVotingDelay, uint256 initialVotingPeriod, uint256 initialProposalThreshold) internal onlyInitializing {
+    function __GovernorSettings_init_unchained(uint48 initialVotingDelay, uint32 initialVotingPeriod, uint256 initialProposalThreshold) internal onlyInitializing {
         _setVotingDelay(initialVotingDelay);
         _setVotingPeriod(initialVotingPeriod);
         _setProposalThreshold(initialProposalThreshold);
@@ -37,21 +50,24 @@ abstract contract GovernorSettingsUpgradeable is Initializable, GovernorUpgradea
      * @dev See {IGovernor-votingDelay}.
      */
     function votingDelay() public view virtual override returns (uint256) {
-        return _votingDelay;
+        GovernorSettingsStorage storage $ = _getGovernorSettingsStorage();
+        return $._votingDelay;
     }
 
     /**
      * @dev See {IGovernor-votingPeriod}.
      */
     function votingPeriod() public view virtual override returns (uint256) {
-        return _votingPeriod;
+        GovernorSettingsStorage storage $ = _getGovernorSettingsStorage();
+        return $._votingPeriod;
     }
 
     /**
      * @dev See {Governor-proposalThreshold}.
      */
     function proposalThreshold() public view virtual override returns (uint256) {
-        return _proposalThreshold;
+        GovernorSettingsStorage storage $ = _getGovernorSettingsStorage();
+        return $._proposalThreshold;
     }
 
     /**
@@ -59,7 +75,7 @@ abstract contract GovernorSettingsUpgradeable is Initializable, GovernorUpgradea
      *
      * Emits a {VotingDelaySet} event.
      */
-    function setVotingDelay(uint256 newVotingDelay) public virtual onlyGovernance {
+    function setVotingDelay(uint48 newVotingDelay) public virtual onlyGovernance {
         _setVotingDelay(newVotingDelay);
     }
 
@@ -68,7 +84,7 @@ abstract contract GovernorSettingsUpgradeable is Initializable, GovernorUpgradea
      *
      * Emits a {VotingPeriodSet} event.
      */
-    function setVotingPeriod(uint256 newVotingPeriod) public virtual onlyGovernance {
+    function setVotingPeriod(uint32 newVotingPeriod) public virtual onlyGovernance {
         _setVotingPeriod(newVotingPeriod);
     }
 
@@ -86,9 +102,10 @@ abstract contract GovernorSettingsUpgradeable is Initializable, GovernorUpgradea
      *
      * Emits a {VotingDelaySet} event.
      */
-    function _setVotingDelay(uint256 newVotingDelay) internal virtual {
-        emit VotingDelaySet(_votingDelay, newVotingDelay);
-        _votingDelay = newVotingDelay;
+    function _setVotingDelay(uint48 newVotingDelay) internal virtual {
+        GovernorSettingsStorage storage $ = _getGovernorSettingsStorage();
+        emit VotingDelaySet($._votingDelay, newVotingDelay);
+        $._votingDelay = newVotingDelay;
     }
 
     /**
@@ -96,11 +113,13 @@ abstract contract GovernorSettingsUpgradeable is Initializable, GovernorUpgradea
      *
      * Emits a {VotingPeriodSet} event.
      */
-    function _setVotingPeriod(uint256 newVotingPeriod) internal virtual {
-        // voting period must be at least one block long
-        require(newVotingPeriod > 0, "GovernorSettings: voting period too low");
-        emit VotingPeriodSet(_votingPeriod, newVotingPeriod);
-        _votingPeriod = newVotingPeriod;
+    function _setVotingPeriod(uint32 newVotingPeriod) internal virtual {
+        GovernorSettingsStorage storage $ = _getGovernorSettingsStorage();
+        if (newVotingPeriod == 0) {
+            revert GovernorInvalidVotingPeriod(0);
+        }
+        emit VotingPeriodSet($._votingPeriod, newVotingPeriod);
+        $._votingPeriod = newVotingPeriod;
     }
 
     /**
@@ -109,14 +128,8 @@ abstract contract GovernorSettingsUpgradeable is Initializable, GovernorUpgradea
      * Emits a {ProposalThresholdSet} event.
      */
     function _setProposalThreshold(uint256 newProposalThreshold) internal virtual {
-        emit ProposalThresholdSet(_proposalThreshold, newProposalThreshold);
-        _proposalThreshold = newProposalThreshold;
+        GovernorSettingsStorage storage $ = _getGovernorSettingsStorage();
+        emit ProposalThresholdSet($._proposalThreshold, newProposalThreshold);
+        $._proposalThreshold = newProposalThreshold;
     }
-
-    /**
-     * @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-    uint256[47] private __gap;
 }

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
-import "../../governance/extensions/GovernorPreventLateQuorumUpgradeable.sol";
-import "../../governance/extensions/GovernorSettingsUpgradeable.sol";
-import "../../governance/extensions/GovernorCountingSimpleUpgradeable.sol";
-import "../../governance/extensions/GovernorVotesUpgradeable.sol";
+import {GovernorUpgradeable} from "../../governance/GovernorUpgradeable.sol";
+import {GovernorPreventLateQuorumUpgradeable} from "../../governance/extensions/GovernorPreventLateQuorumUpgradeable.sol";
+import {GovernorSettingsUpgradeable} from "../../governance/extensions/GovernorSettingsUpgradeable.sol";
+import {GovernorCountingSimpleUpgradeable} from "../../governance/extensions/GovernorCountingSimpleUpgradeable.sol";
+import {GovernorVotesUpgradeable} from "../../governance/extensions/GovernorVotesUpgradeable.sol";
 import {Initializable} from "../../proxy/utils/Initializable.sol";
 
 abstract contract GovernorPreventLateQuorumMockUpgradeable is
@@ -47,11 +48,4 @@ abstract contract GovernorPreventLateQuorumMockUpgradeable is
     ) internal override(GovernorUpgradeable, GovernorPreventLateQuorumUpgradeable) returns (uint256) {
         return super._castVote(proposalId, account, support, reason, params);
     }
-
-    /**
-     * @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-    uint256[49] private __gap;
 }

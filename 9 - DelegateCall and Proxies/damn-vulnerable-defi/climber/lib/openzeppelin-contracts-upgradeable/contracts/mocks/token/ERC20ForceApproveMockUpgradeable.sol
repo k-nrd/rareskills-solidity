@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
-import "../../token/ERC20/ERC20Upgradeable.sol";
+import {ERC20Upgradeable} from "../../token/ERC20/ERC20Upgradeable.sol";
 import {Initializable} from "../../proxy/utils/Initializable.sol";
 
-// contract that replicate USDT (0xdac17f958d2ee523a2206206994597c13d831ec7) approval beavior
+// contract that replicate USDT (0xdac17f958d2ee523a2206206994597c13d831ec7) approval behavior
 abstract contract ERC20ForceApproveMockUpgradeable is Initializable, ERC20Upgradeable {
     function __ERC20ForceApproveMock_init() internal onlyInitializing {
     }
@@ -16,11 +16,4 @@ abstract contract ERC20ForceApproveMockUpgradeable is Initializable, ERC20Upgrad
         require(amount == 0 || allowance(msg.sender, spender) == 0, "USDT approval failure");
         return super.approve(spender, amount);
     }
-
-    /**
-     * @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-    uint256[50] private __gap;
 }

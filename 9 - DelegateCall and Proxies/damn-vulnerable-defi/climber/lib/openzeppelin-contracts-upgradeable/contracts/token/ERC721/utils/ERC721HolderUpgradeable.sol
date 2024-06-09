@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: MIT
-// OpenZeppelin Contracts (last updated v4.9.0) (token/ERC721/utils/ERC721Holder.sol)
+// OpenZeppelin Contracts (last updated v5.0.0) (token/ERC721/utils/ERC721Holder.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
-import "../IERC721ReceiverUpgradeable.sol";
+import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {Initializable} from "../../../proxy/utils/Initializable.sol";
 
 /**
  * @dev Implementation of the {IERC721Receiver} interface.
  *
  * Accepts all token transfers.
- * Make sure the contract is able to use its token with {IERC721-safeTransferFrom}, {IERC721-approve} or {IERC721-setApprovalForAll}.
+ * Make sure the contract is able to use its token with {IERC721-safeTransferFrom}, {IERC721-approve} or
+ * {IERC721-setApprovalForAll}.
  */
-contract ERC721HolderUpgradeable is Initializable, IERC721ReceiverUpgradeable {
+abstract contract ERC721HolderUpgradeable is Initializable, IERC721Receiver {
     function __ERC721Holder_init() internal onlyInitializing {
     }
 
@@ -23,14 +24,7 @@ contract ERC721HolderUpgradeable is Initializable, IERC721ReceiverUpgradeable {
      *
      * Always returns `IERC721Receiver.onERC721Received.selector`.
      */
-    function onERC721Received(address, address, uint256, bytes memory) public virtual override returns (bytes4) {
+    function onERC721Received(address, address, uint256, bytes memory) public virtual returns (bytes4) {
         return this.onERC721Received.selector;
     }
-
-    /**
-     * @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-    uint256[50] private __gap;
 }

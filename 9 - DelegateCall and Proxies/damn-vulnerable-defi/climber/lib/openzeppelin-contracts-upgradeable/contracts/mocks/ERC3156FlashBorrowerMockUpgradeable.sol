@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
-import "../token/ERC20/IERC20Upgradeable.sol";
-import "../interfaces/IERC3156Upgradeable.sol";
-import "../utils/AddressUpgradeable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC3156FlashBorrower} from "@openzeppelin/contracts/interfaces/IERC3156FlashBorrower.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {Initializable} from "../proxy/utils/Initializable.sol";
 
 /**
@@ -14,7 +14,7 @@ import {Initializable} from "../proxy/utils/Initializable.sol";
  * Following best practices, always have your contract properly audited before using them to manipulate important funds on
  * live networks.
  */
-contract ERC3156FlashBorrowerMockUpgradeable is Initializable, IERC3156FlashBorrowerUpgradeable {
+contract ERC3156FlashBorrowerMockUpgradeable is Initializable, IERC3156FlashBorrower {
     bytes32 internal constant _RETURN_VALUE = keccak256("ERC3156FlashBorrower.onFlashLoan");
 
     bool _enableApprove;
@@ -38,28 +38,21 @@ contract ERC3156FlashBorrowerMockUpgradeable is Initializable, IERC3156FlashBorr
         uint256 amount,
         uint256 fee,
         bytes calldata data
-    ) public override returns (bytes32) {
+    ) public returns (bytes32) {
         require(msg.sender == token);
 
-        emit BalanceOf(token, address(this), IERC20Upgradeable(token).balanceOf(address(this)));
-        emit TotalSupply(token, IERC20Upgradeable(token).totalSupply());
+        emit BalanceOf(token, address(this), IERC20(token).balanceOf(address(this)));
+        emit TotalSupply(token, IERC20(token).totalSupply());
 
         if (data.length > 0) {
             // WARNING: This code is for testing purposes only! Do not use.
-            AddressUpgradeable.functionCall(token, data);
+            Address.functionCall(token, data);
         }
 
         if (_enableApprove) {
-            IERC20Upgradeable(token).approve(token, amount + fee);
+            IERC20(token).approve(token, amount + fee);
         }
 
         return _enableReturn ? _RETURN_VALUE : bytes32(0);
     }
-
-    /**
-     * @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-    uint256[49] private __gap;
 }

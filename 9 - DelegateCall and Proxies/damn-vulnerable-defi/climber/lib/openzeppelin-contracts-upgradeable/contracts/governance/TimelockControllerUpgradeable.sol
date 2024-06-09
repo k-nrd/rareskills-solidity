@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
-// OpenZeppelin Contracts (last updated v4.9.0) (governance/TimelockController.sol)
+// OpenZeppelin Contracts (last updated v5.0.0) (governance/TimelockController.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
-import "../access/AccessControlUpgradeable.sol";
-import "../token/ERC721/IERC721ReceiverUpgradeable.sol";
-import "../token/ERC1155/IERC1155ReceiverUpgradeable.sol";
+import {AccessControlUpgradeable} from "../access/AccessControlUpgradeable.sol";
+import {ERC721HolderUpgradeable} from "../token/ERC721/utils/ERC721HolderUpgradeable.sol";
+import {ERC1155HolderUpgradeable} from "../token/ERC1155/utils/ERC1155HolderUpgradeable.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {Initializable} from "../proxy/utils/Initializable.sol";
 
 /**
@@ -20,18 +21,63 @@ import {Initializable} from "../proxy/utils/Initializable.sol";
  * is in charge of proposing (resp executing) operations. A common use case is
  * to position this {TimelockController} as the owner of a smart contract, with
  * a multisig or a DAO as the sole proposer.
- *
- * _Available since v3.3._
  */
-contract TimelockControllerUpgradeable is Initializable, AccessControlUpgradeable, IERC721ReceiverUpgradeable, IERC1155ReceiverUpgradeable {
-    bytes32 public constant TIMELOCK_ADMIN_ROLE = keccak256("TIMELOCK_ADMIN_ROLE");
+contract TimelockControllerUpgradeable is Initializable, AccessControlUpgradeable, ERC721HolderUpgradeable, ERC1155HolderUpgradeable {
     bytes32 public constant PROPOSER_ROLE = keccak256("PROPOSER_ROLE");
     bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
     bytes32 public constant CANCELLER_ROLE = keccak256("CANCELLER_ROLE");
     uint256 internal constant _DONE_TIMESTAMP = uint256(1);
 
-    mapping(bytes32 => uint256) private _timestamps;
-    uint256 private _minDelay;
+    /// @custom:storage-location erc7201:openzeppelin.storage.TimelockController
+    struct TimelockControllerStorage {
+        mapping(bytes32 id => uint256) _timestamps;
+        uint256 _minDelay;
+    }
+
+    // keccak256(abi.encode(uint256(keccak256("openzeppelin.storage.TimelockController")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant TimelockControllerStorageLocation = 0x9a37c2aa9d186a0969ff8a8267bf4e07e864c2f2768f5040949e28a624fb3600;
+
+    function _getTimelockControllerStorage() private pure returns (TimelockControllerStorage storage $) {
+        assembly {
+            $.slot := TimelockControllerStorageLocation
+        }
+    }
+
+    enum OperationState {
+        Unset,
+        Waiting,
+        Ready,
+        Done
+    }
+
+    /**
+     * @dev Mismatch between the parameters length for an operation call.
+     */
+    error TimelockInvalidOperationLength(uint256 targets, uint256 payloads, uint256 values);
+
+    /**
+     * @dev The schedule operation doesn't meet the minimum delay.
+     */
+    error TimelockInsufficientDelay(uint256 delay, uint256 minDelay);
+
+    /**
+     * @dev The current state of an operation is not as required.
+     * The `expectedStates` is a bitmap with the bits enabled for each OperationState enum position
+     * counting from right to left.
+     *
+     * See {_encodeStateBitmap}.
+     */
+    error TimelockUnexpectedOperationState(bytes32 operationId, bytes32 expectedStates);
+
+    /**
+     * @dev The predecessor to an operation not yet done.
+     */
+    error TimelockUnexecutedPredecessor(bytes32 predecessorId);
+
+    /**
+     * @dev The caller account is not authorized.
+     */
+    error TimelockUnauthorizedCaller(address caller);
 
     /**
      * @dev Emitted when a call is scheduled as part of operation `id`.
@@ -66,10 +112,13 @@ contract TimelockControllerUpgradeable is Initializable, AccessControlUpgradeabl
      */
     event MinDelayChange(uint256 oldDuration, uint256 newDuration);
 
+    function initialize(uint256 minDelay, address[] memory proposers, address[] memory executors, address admin) public virtual initializer {
+        __TimelockController_init(minDelay, proposers, executors, admin);
+    }
     /**
      * @dev Initializes the contract with the following parameters:
      *
-     * - `minDelay`: initial minimum delay for operations
+     * - `minDelay`: initial minimum delay in seconds for operations
      * - `proposers`: accounts to be granted proposer and canceller roles
      * - `executors`: accounts to be granted executor role
      * - `admin`: optional account to be granted admin role; disable with zero address
@@ -84,31 +133,27 @@ contract TimelockControllerUpgradeable is Initializable, AccessControlUpgradeabl
     }
 
     function __TimelockController_init_unchained(uint256 minDelay, address[] memory proposers, address[] memory executors, address admin) internal onlyInitializing {
-        _setRoleAdmin(TIMELOCK_ADMIN_ROLE, TIMELOCK_ADMIN_ROLE);
-        _setRoleAdmin(PROPOSER_ROLE, TIMELOCK_ADMIN_ROLE);
-        _setRoleAdmin(EXECUTOR_ROLE, TIMELOCK_ADMIN_ROLE);
-        _setRoleAdmin(CANCELLER_ROLE, TIMELOCK_ADMIN_ROLE);
-
+        TimelockControllerStorage storage $ = _getTimelockControllerStorage();
         // self administration
-        _setupRole(TIMELOCK_ADMIN_ROLE, address(this));
+        _grantRole(DEFAULT_ADMIN_ROLE, address(this));
 
         // optional admin
         if (admin != address(0)) {
-            _setupRole(TIMELOCK_ADMIN_ROLE, admin);
+            _grantRole(DEFAULT_ADMIN_ROLE, admin);
         }
 
         // register proposers and cancellers
         for (uint256 i = 0; i < proposers.length; ++i) {
-            _setupRole(PROPOSER_ROLE, proposers[i]);
-            _setupRole(CANCELLER_ROLE, proposers[i]);
+            _grantRole(PROPOSER_ROLE, proposers[i]);
+            _grantRole(CANCELLER_ROLE, proposers[i]);
         }
 
         // register executors
         for (uint256 i = 0; i < executors.length; ++i) {
-            _setupRole(EXECUTOR_ROLE, executors[i]);
+            _grantRole(EXECUTOR_ROLE, executors[i]);
         }
 
-        _minDelay = minDelay;
+        $._minDelay = minDelay;
         emit MinDelayChange(0, minDelay);
     }
 
@@ -133,38 +178,40 @@ contract TimelockControllerUpgradeable is Initializable, AccessControlUpgradeabl
     /**
      * @dev See {IERC165-supportsInterface}.
      */
-    function supportsInterface(bytes4 interfaceId) public view virtual override(IERC165Upgradeable, AccessControlUpgradeable) returns (bool) {
-        return interfaceId == type(IERC1155ReceiverUpgradeable).interfaceId || super.supportsInterface(interfaceId);
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view virtual override(AccessControlUpgradeable, ERC1155HolderUpgradeable) returns (bool) {
+        return super.supportsInterface(interfaceId);
     }
 
     /**
-     * @dev Returns whether an id correspond to a registered operation. This
-     * includes both Pending, Ready and Done operations.
+     * @dev Returns whether an id corresponds to a registered operation. This
+     * includes both Waiting, Ready, and Done operations.
      */
-    function isOperation(bytes32 id) public view virtual returns (bool) {
-        return getTimestamp(id) > 0;
+    function isOperation(bytes32 id) public view returns (bool) {
+        return getOperationState(id) != OperationState.Unset;
     }
 
     /**
      * @dev Returns whether an operation is pending or not. Note that a "pending" operation may also be "ready".
      */
-    function isOperationPending(bytes32 id) public view virtual returns (bool) {
-        return getTimestamp(id) > _DONE_TIMESTAMP;
+    function isOperationPending(bytes32 id) public view returns (bool) {
+        OperationState state = getOperationState(id);
+        return state == OperationState.Waiting || state == OperationState.Ready;
     }
 
     /**
      * @dev Returns whether an operation is ready for execution. Note that a "ready" operation is also "pending".
      */
-    function isOperationReady(bytes32 id) public view virtual returns (bool) {
-        uint256 timestamp = getTimestamp(id);
-        return timestamp > _DONE_TIMESTAMP && timestamp <= block.timestamp;
+    function isOperationReady(bytes32 id) public view returns (bool) {
+        return getOperationState(id) == OperationState.Ready;
     }
 
     /**
      * @dev Returns whether an operation is done or not.
      */
-    function isOperationDone(bytes32 id) public view virtual returns (bool) {
-        return getTimestamp(id) == _DONE_TIMESTAMP;
+    function isOperationDone(bytes32 id) public view returns (bool) {
+        return getOperationState(id) == OperationState.Done;
     }
 
     /**
@@ -172,16 +219,34 @@ contract TimelockControllerUpgradeable is Initializable, AccessControlUpgradeabl
      * unset operations, 1 for done operations).
      */
     function getTimestamp(bytes32 id) public view virtual returns (uint256) {
-        return _timestamps[id];
+        TimelockControllerStorage storage $ = _getTimelockControllerStorage();
+        return $._timestamps[id];
     }
 
     /**
-     * @dev Returns the minimum delay for an operation to become valid.
+     * @dev Returns operation state.
+     */
+    function getOperationState(bytes32 id) public view virtual returns (OperationState) {
+        uint256 timestamp = getTimestamp(id);
+        if (timestamp == 0) {
+            return OperationState.Unset;
+        } else if (timestamp == _DONE_TIMESTAMP) {
+            return OperationState.Done;
+        } else if (timestamp > block.timestamp) {
+            return OperationState.Waiting;
+        } else {
+            return OperationState.Ready;
+        }
+    }
+
+    /**
+     * @dev Returns the minimum delay in seconds for an operation to become valid.
      *
      * This value can be changed by executing an operation that calls `updateDelay`.
      */
     function getMinDelay() public view virtual returns (uint256) {
-        return _minDelay;
+        TimelockControllerStorage storage $ = _getTimelockControllerStorage();
+        return $._minDelay;
     }
 
     /**
@@ -254,8 +319,9 @@ contract TimelockControllerUpgradeable is Initializable, AccessControlUpgradeabl
         bytes32 salt,
         uint256 delay
     ) public virtual onlyRole(PROPOSER_ROLE) {
-        require(targets.length == values.length, "TimelockController: length mismatch");
-        require(targets.length == payloads.length, "TimelockController: length mismatch");
+        if (targets.length != values.length || targets.length != payloads.length) {
+            revert TimelockInvalidOperationLength(targets.length, payloads.length, values.length);
+        }
 
         bytes32 id = hashOperationBatch(targets, values, payloads, predecessor, salt);
         _schedule(id, delay);
@@ -271,9 +337,15 @@ contract TimelockControllerUpgradeable is Initializable, AccessControlUpgradeabl
      * @dev Schedule an operation that is to become valid after a given delay.
      */
     function _schedule(bytes32 id, uint256 delay) private {
-        require(!isOperation(id), "TimelockController: operation already scheduled");
-        require(delay >= getMinDelay(), "TimelockController: insufficient delay");
-        _timestamps[id] = block.timestamp + delay;
+        TimelockControllerStorage storage $ = _getTimelockControllerStorage();
+        if (isOperation(id)) {
+            revert TimelockUnexpectedOperationState(id, _encodeStateBitmap(OperationState.Unset));
+        }
+        uint256 minDelay = getMinDelay();
+        if (delay < minDelay) {
+            revert TimelockInsufficientDelay(delay, minDelay);
+        }
+        $._timestamps[id] = block.timestamp + delay;
     }
 
     /**
@@ -284,8 +356,14 @@ contract TimelockControllerUpgradeable is Initializable, AccessControlUpgradeabl
      * - the caller must have the 'canceller' role.
      */
     function cancel(bytes32 id) public virtual onlyRole(CANCELLER_ROLE) {
-        require(isOperationPending(id), "TimelockController: operation cannot be cancelled");
-        delete _timestamps[id];
+        TimelockControllerStorage storage $ = _getTimelockControllerStorage();
+        if (!isOperationPending(id)) {
+            revert TimelockUnexpectedOperationState(
+                id,
+                _encodeStateBitmap(OperationState.Waiting) | _encodeStateBitmap(OperationState.Ready)
+            );
+        }
+        delete $._timestamps[id];
 
         emit Cancelled(id);
     }
@@ -336,8 +414,9 @@ contract TimelockControllerUpgradeable is Initializable, AccessControlUpgradeabl
         bytes32 predecessor,
         bytes32 salt
     ) public payable virtual onlyRoleOrOpenRole(EXECUTOR_ROLE) {
-        require(targets.length == values.length, "TimelockController: length mismatch");
-        require(targets.length == payloads.length, "TimelockController: length mismatch");
+        if (targets.length != values.length || targets.length != payloads.length) {
+            revert TimelockInvalidOperationLength(targets.length, payloads.length, values.length);
+        }
 
         bytes32 id = hashOperationBatch(targets, values, payloads, predecessor, salt);
 
@@ -356,24 +435,31 @@ contract TimelockControllerUpgradeable is Initializable, AccessControlUpgradeabl
      * @dev Execute an operation's call.
      */
     function _execute(address target, uint256 value, bytes calldata data) internal virtual {
-        (bool success, ) = target.call{value: value}(data);
-        require(success, "TimelockController: underlying transaction reverted");
+        (bool success, bytes memory returndata) = target.call{value: value}(data);
+        Address.verifyCallResult(success, returndata);
     }
 
     /**
      * @dev Checks before execution of an operation's calls.
      */
     function _beforeCall(bytes32 id, bytes32 predecessor) private view {
-        require(isOperationReady(id), "TimelockController: operation is not ready");
-        require(predecessor == bytes32(0) || isOperationDone(predecessor), "TimelockController: missing dependency");
+        if (!isOperationReady(id)) {
+            revert TimelockUnexpectedOperationState(id, _encodeStateBitmap(OperationState.Ready));
+        }
+        if (predecessor != bytes32(0) && !isOperationDone(predecessor)) {
+            revert TimelockUnexecutedPredecessor(predecessor);
+        }
     }
 
     /**
      * @dev Checks after execution of an operation's calls.
      */
     function _afterCall(bytes32 id) private {
-        require(isOperationReady(id), "TimelockController: operation is not ready");
-        _timestamps[id] = _DONE_TIMESTAMP;
+        TimelockControllerStorage storage $ = _getTimelockControllerStorage();
+        if (!isOperationReady(id)) {
+            revert TimelockUnexpectedOperationState(id, _encodeStateBitmap(OperationState.Ready));
+        }
+        $._timestamps[id] = _DONE_TIMESTAMP;
     }
 
     /**
@@ -387,48 +473,27 @@ contract TimelockControllerUpgradeable is Initializable, AccessControlUpgradeabl
      * an operation where the timelock is the target and the data is the ABI-encoded call to this function.
      */
     function updateDelay(uint256 newDelay) external virtual {
-        require(msg.sender == address(this), "TimelockController: caller must be timelock");
-        emit MinDelayChange(_minDelay, newDelay);
-        _minDelay = newDelay;
+        TimelockControllerStorage storage $ = _getTimelockControllerStorage();
+        address sender = _msgSender();
+        if (sender != address(this)) {
+            revert TimelockUnauthorizedCaller(sender);
+        }
+        emit MinDelayChange($._minDelay, newDelay);
+        $._minDelay = newDelay;
     }
 
     /**
-     * @dev See {IERC721Receiver-onERC721Received}.
+     * @dev Encodes a `OperationState` into a `bytes32` representation where each bit enabled corresponds to
+     * the underlying position in the `OperationState` enum. For example:
+     *
+     * 0x000...1000
+     *   ^^^^^^----- ...
+     *         ^---- Done
+     *          ^--- Ready
+     *           ^-- Waiting
+     *            ^- Unset
      */
-    function onERC721Received(address, address, uint256, bytes memory) public virtual override returns (bytes4) {
-        return this.onERC721Received.selector;
+    function _encodeStateBitmap(OperationState operationState) internal pure returns (bytes32) {
+        return bytes32(1 << uint8(operationState));
     }
-
-    /**
-     * @dev See {IERC1155Receiver-onERC1155Received}.
-     */
-    function onERC1155Received(
-        address,
-        address,
-        uint256,
-        uint256,
-        bytes memory
-    ) public virtual override returns (bytes4) {
-        return this.onERC1155Received.selector;
-    }
-
-    /**
-     * @dev See {IERC1155Receiver-onERC1155BatchReceived}.
-     */
-    function onERC1155BatchReceived(
-        address,
-        address,
-        uint256[] memory,
-        uint256[] memory,
-        bytes memory
-    ) public virtual override returns (bytes4) {
-        return this.onERC1155BatchReceived.selector;
-    }
-
-    /**
-     * @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-    uint256[48] private __gap;
 }

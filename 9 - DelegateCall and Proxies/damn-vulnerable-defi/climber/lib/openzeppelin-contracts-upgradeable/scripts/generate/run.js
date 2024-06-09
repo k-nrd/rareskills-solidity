@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const cp = require('child_process');
+// const cp = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const format = require('./format-lines');
@@ -23,11 +23,11 @@ function generateFromTemplate(file, template, outputPrefix = '') {
     ...(version ? [version + ` (${file})`] : []),
     `// This file was procedurally generated from ${input}.`,
     '',
-    require(template),
+    require(template).trimEnd(),
   );
 
   fs.writeFileSync(output, content);
-  cp.execFileSync('prettier', ['--write', output]);
+  // cp.execFileSync('prettier', ['--write', output]);
 }
 
 // Contracts
@@ -35,15 +35,19 @@ for (const [file, template] of Object.entries({
   'utils/math/SafeCast.sol': './templates/SafeCast.js',
   'utils/structs/EnumerableSet.sol': './templates/EnumerableSet.js',
   'utils/structs/EnumerableMap.sol': './templates/EnumerableMap.js',
-  'utils/Checkpoints.sol': './templates/Checkpoints.js',
+  'utils/structs/Checkpoints.sol': './templates/Checkpoints.js',
+  'utils/SlotDerivation.sol': './templates/SlotDerivation.js',
   'utils/StorageSlot.sol': './templates/StorageSlot.js',
+  'utils/Arrays.sol': './templates/Arrays.js',
+  'mocks/StorageSlotMock.sol': './templates/StorageSlotMock.js',
 })) {
   generateFromTemplate(file, template, './contracts/');
 }
 
 // Tests
 for (const [file, template] of Object.entries({
-  'utils/Checkpoints.t.sol': './templates/Checkpoints.t.js',
+  'utils/structs/Checkpoints.t.sol': './templates/Checkpoints.t.js',
+  'utils/SlotDerivation.t.sol': './templates/SlotDerivation.t.js',
 })) {
   generateFromTemplate(file, template, './test/');
 }

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/utils/Address.sol";
-import "./ClimberTimelockBase.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
+import {ClimberTimelockBase} from "./ClimberTimelockBase.sol";
 import {ADMIN_ROLE, PROPOSER_ROLE, MAX_TARGETS, MIN_TARGETS, MAX_DELAY} from "./ClimberConstants.sol";
 import {InvalidTargetsCount, InvalidDataElementsCount, InvalidValuesCount, OperationAlreadyKnown, NotReadyForExecution, CallerNotTimelock, NewDelayAboveMax} from "./ClimberErrors.sol";
 
@@ -21,9 +21,9 @@ contract ClimberTimelock is ClimberTimelockBase {
     constructor(address admin, address proposer) {
         _setRoleAdmin(ADMIN_ROLE, ADMIN_ROLE);
         _setRoleAdmin(PROPOSER_ROLE, ADMIN_ROLE);
-        _setupRole(ADMIN_ROLE, admin);
-        _setupRole(ADMIN_ROLE, address(this)); // self administration
-        _setupRole(PROPOSER_ROLE, proposer);
+        _grantRole(ADMIN_ROLE, admin);
+        _grantRole(ADMIN_ROLE, address(this)); // self administration
+        _grantRole(PROPOSER_ROLE, proposer);
 
         delay = 1 hours;
     }

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
-import {Base64Upgradeable} from "../utils/Base64Upgradeable.sol";
+import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
 import {Initializable} from "../proxy/utils/Initializable.sol";
 
 contract Base64DirtyUpgradeable is Initializable {
@@ -20,13 +20,6 @@ contract Base64DirtyUpgradeable is Initializable {
         // To silence warning
         unused;
 
-        return Base64Upgradeable.encode(input);
+        return Base64.encode(input);
     }
-
-    /**
-     * @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-    uint256[50] private __gap;
 }

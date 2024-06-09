@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
-import "forge-std/Test.sol";
-import "../../contracts/utils/Strings.sol";
-import "../../contracts/governance/Governor.sol";
+import {Test} from "forge-std/Test.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {Governor} from "@openzeppelin/contracts/governance/Governor.sol";
 
 contract GovernorInternalTest is Test, Governor {
     constructor() Governor("") {}
@@ -26,7 +26,7 @@ contract GovernorInternalTest is Test, Governor {
         assertFalse(_isValidDescriptionForProposer(actualProposer, description));
     }
 
-    // We don't need to truly implement implement the missing functions because we are just testing
+    // We don't need to truly implement the missing functions because we are just testing
     // internal helpers.
 
     function clock() public pure override returns (uint48) {}
@@ -51,5 +51,5 @@ contract GovernorInternalTest is Test, Governor {
 
     function _getVotes(address, uint256, bytes memory) internal pure virtual override returns (uint256) {}
 
-    function _countVote(uint256, address, uint8, uint256, bytes memory) internal virtual override {}
+    function _countVote(uint256, address, uint8, uint256, bytes memory) internal virtual override returns (uint256) {}
 }

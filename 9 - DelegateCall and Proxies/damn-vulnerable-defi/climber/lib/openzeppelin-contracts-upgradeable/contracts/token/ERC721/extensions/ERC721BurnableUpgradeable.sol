@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
-// OpenZeppelin Contracts (last updated v4.8.0) (token/ERC721/extensions/ERC721Burnable.sol)
+// OpenZeppelin Contracts (last updated v5.0.0) (token/ERC721/extensions/ERC721Burnable.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
-import "../ERC721Upgradeable.sol";
-import "../../../utils/ContextUpgradeable.sol";
+import {ERC721Upgradeable} from "../ERC721Upgradeable.sol";
+import {ContextUpgradeable} from "../../../utils/ContextUpgradeable.sol";
 import {Initializable} from "../../../proxy/utils/Initializable.sol";
 
 /**
- * @title ERC721 Burnable Token
- * @dev ERC721 Token that can be burned (destroyed).
+ * @title ERC-721 Burnable Token
+ * @dev ERC-721 Token that can be burned (destroyed).
  */
 abstract contract ERC721BurnableUpgradeable is Initializable, ContextUpgradeable, ERC721Upgradeable {
     function __ERC721Burnable_init() internal onlyInitializing {
@@ -25,15 +25,8 @@ abstract contract ERC721BurnableUpgradeable is Initializable, ContextUpgradeable
      * - The caller must own `tokenId` or be an approved operator.
      */
     function burn(uint256 tokenId) public virtual {
-        //solhint-disable-next-line max-line-length
-        require(_isApprovedOrOwner(_msgSender(), tokenId), "ERC721: caller is not token owner or approved");
-        _burn(tokenId);
+        // Setting an "auth" arguments enables the `_isAuthorized` check which verifies that the token exists
+        // (from != 0). Therefore, it is not needed to verify that the return value is not 0 here.
+        _update(address(0), tokenId, _msgSender());
     }
-
-    /**
-     * @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-    uint256[50] private __gap;
 }

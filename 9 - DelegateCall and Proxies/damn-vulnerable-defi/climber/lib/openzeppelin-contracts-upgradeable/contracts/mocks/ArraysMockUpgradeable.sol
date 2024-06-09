@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
-import "../utils/ArraysUpgradeable.sol";
+import {Arrays} from "@openzeppelin/contracts/utils/Arrays.sol";
 import {Initializable} from "../proxy/utils/Initializable.sol";
 
 contract Uint256ArraysMockUpgradeable is Initializable {
-    using ArraysUpgradeable for uint256[];
+    using Arrays for uint256[];
 
     uint256[] private _array;
 
@@ -18,24 +18,53 @@ contract Uint256ArraysMockUpgradeable is Initializable {
         _array = array;
     }
 
-    function findUpperBound(uint256 element) external view returns (uint256) {
-        return _array.findUpperBound(element);
+    function findUpperBound(uint256 value) external view returns (uint256) {
+        return _array.findUpperBound(value);
+    }
+
+    function lowerBound(uint256 value) external view returns (uint256) {
+        return _array.lowerBound(value);
+    }
+
+    function upperBound(uint256 value) external view returns (uint256) {
+        return _array.upperBound(value);
+    }
+
+    function lowerBoundMemory(uint256[] memory array, uint256 value) external pure returns (uint256) {
+        return array.lowerBoundMemory(value);
+    }
+
+    function upperBoundMemory(uint256[] memory array, uint256 value) external pure returns (uint256) {
+        return array.upperBoundMemory(value);
     }
 
     function unsafeAccess(uint256 pos) external view returns (uint256) {
         return _array.unsafeAccess(pos).value;
     }
 
-    /**
-     * @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-    uint256[49] private __gap;
+    function sort(uint256[] memory array) external pure returns (uint256[] memory) {
+        return array.sort();
+    }
+
+    function sortReverse(uint256[] memory array) external pure returns (uint256[] memory) {
+        return array.sort(_reverse);
+    }
+
+    function _reverse(uint256 a, uint256 b) private pure returns (bool) {
+        return a > b;
+    }
+
+    function unsafeSetLength(uint256 newLength) external {
+        _array.unsafeSetLength(newLength);
+    }
+
+    function length() external view returns (uint256) {
+        return _array.length;
+    }
 }
 
 contract AddressArraysMockUpgradeable is Initializable {
-    using ArraysUpgradeable for address[];
+    using Arrays for address[];
 
     address[] private _array;
 
@@ -51,16 +80,29 @@ contract AddressArraysMockUpgradeable is Initializable {
         return _array.unsafeAccess(pos).value;
     }
 
-    /**
-     * @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-    uint256[49] private __gap;
+    function sort(address[] memory array) external pure returns (address[] memory) {
+        return array.sort();
+    }
+
+    function sortReverse(address[] memory array) external pure returns (address[] memory) {
+        return array.sort(_reverse);
+    }
+
+    function _reverse(address a, address b) private pure returns (bool) {
+        return uint160(a) > uint160(b);
+    }
+
+    function unsafeSetLength(uint256 newLength) external {
+        _array.unsafeSetLength(newLength);
+    }
+
+    function length() external view returns (uint256) {
+        return _array.length;
+    }
 }
 
 contract Bytes32ArraysMockUpgradeable is Initializable {
-    using ArraysUpgradeable for bytes32[];
+    using Arrays for bytes32[];
 
     bytes32[] private _array;
 
@@ -76,10 +118,23 @@ contract Bytes32ArraysMockUpgradeable is Initializable {
         return _array.unsafeAccess(pos).value;
     }
 
-    /**
-     * @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-    uint256[49] private __gap;
+    function sort(bytes32[] memory array) external pure returns (bytes32[] memory) {
+        return array.sort();
+    }
+
+    function sortReverse(bytes32[] memory array) external pure returns (bytes32[] memory) {
+        return array.sort(_reverse);
+    }
+
+    function _reverse(bytes32 a, bytes32 b) private pure returns (bool) {
+        return uint256(a) > uint256(b);
+    }
+
+    function unsafeSetLength(uint256 newLength) external {
+        _array.unsafeSetLength(newLength);
+    }
+
+    function length() external view returns (uint256) {
+        return _array.length;
+    }
 }

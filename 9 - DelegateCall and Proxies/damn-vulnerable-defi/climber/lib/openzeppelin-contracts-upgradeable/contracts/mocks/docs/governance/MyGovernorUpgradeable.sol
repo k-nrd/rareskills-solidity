@@ -1,22 +1,26 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.2;
+pragma solidity ^0.8.20;
 
-import "../../../governance/GovernorUpgradeable.sol";
-import "../../../governance/compatibility/GovernorCompatibilityBravoUpgradeable.sol";
-import "../../../governance/extensions/GovernorVotesUpgradeable.sol";
-import "../../../governance/extensions/GovernorVotesQuorumFractionUpgradeable.sol";
-import "../../../governance/extensions/GovernorTimelockControlUpgradeable.sol";
+import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
+import {GovernorUpgradeable} from "../../../governance/GovernorUpgradeable.sol";
+import {GovernorCountingSimpleUpgradeable} from "../../../governance/extensions/GovernorCountingSimpleUpgradeable.sol";
+import {GovernorVotesUpgradeable} from "../../../governance/extensions/GovernorVotesUpgradeable.sol";
+import {GovernorVotesQuorumFractionUpgradeable} from "../../../governance/extensions/GovernorVotesQuorumFractionUpgradeable.sol";
+import {GovernorTimelockControlUpgradeable} from "../../../governance/extensions/GovernorTimelockControlUpgradeable.sol";
+import {TimelockControllerUpgradeable} from "../../../governance/TimelockControllerUpgradeable.sol";
+import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {Initializable} from "../../../proxy/utils/Initializable.sol";
 
 contract MyGovernorUpgradeable is
     Initializable, GovernorUpgradeable,
-    GovernorCompatibilityBravoUpgradeable,
+    GovernorCountingSimpleUpgradeable,
     GovernorVotesUpgradeable,
     GovernorVotesQuorumFractionUpgradeable,
     GovernorTimelockControlUpgradeable
 {
     function __MyGovernor_init(
-        IVotesUpgradeable _token,
+        IVotes _token,
         TimelockControllerUpgradeable _timelock
     ) internal onlyInitializing {
         __EIP712_init_unchained("MyGovernor", version());
@@ -27,7 +31,7 @@ contract MyGovernorUpgradeable is
     }
 
     function __MyGovernor_init_unchained(
-        IVotesUpgradeable,
+        IVotes,
         TimelockControllerUpgradeable
     ) internal onlyInitializing {}
 
@@ -45,38 +49,34 @@ contract MyGovernorUpgradeable is
 
     // The functions below are overrides required by Solidity.
 
-    function state(
-        uint256 proposalId
-    ) public view override(GovernorUpgradeable, IGovernorUpgradeable, GovernorTimelockControlUpgradeable) returns (ProposalState) {
+    function state(uint256 proposalId) public view override(GovernorUpgradeable, GovernorTimelockControlUpgradeable) returns (ProposalState) {
         return super.state(proposalId);
     }
 
-    function propose(
-        address[] memory targets,
-        uint256[] memory values,
-        bytes[] memory calldatas,
-        string memory description
-    ) public override(GovernorUpgradeable, GovernorCompatibilityBravoUpgradeable, IGovernorUpgradeable) returns (uint256) {
-        return super.propose(targets, values, calldatas, description);
+    function proposalNeedsQueuing(
+        uint256 proposalId
+    ) public view virtual override(GovernorUpgradeable, GovernorTimelockControlUpgradeable) returns (bool) {
+        return super.proposalNeedsQueuing(proposalId);
     }
 
-    function cancel(
+    function _queueOperations(
+        uint256 proposalId,
         address[] memory targets,
         uint256[] memory values,
         bytes[] memory calldatas,
         bytes32 descriptionHash
-    ) public override(GovernorUpgradeable, GovernorCompatibilityBravoUpgradeable, IGovernorUpgradeable) returns (uint256) {
-        return super.cancel(targets, values, calldatas, descriptionHash);
+    ) internal override(GovernorUpgradeable, GovernorTimelockControlUpgradeable) returns (uint48) {
+        return super._queueOperations(proposalId, targets, values, calldatas, descriptionHash);
     }
 
-    function _execute(
+    function _executeOperations(
         uint256 proposalId,
         address[] memory targets,
         uint256[] memory values,
         bytes[] memory calldatas,
         bytes32 descriptionHash
     ) internal override(GovernorUpgradeable, GovernorTimelockControlUpgradeable) {
-        super._execute(proposalId, targets, values, calldatas, descriptionHash);
+        super._executeOperations(proposalId, targets, values, calldatas, descriptionHash);
     }
 
     function _cancel(
@@ -91,17 +91,4 @@ contract MyGovernorUpgradeable is
     function _executor() internal view override(GovernorUpgradeable, GovernorTimelockControlUpgradeable) returns (address) {
         return super._executor();
     }
-
-    function supportsInterface(
-        bytes4 interfaceId
-    ) public view override(GovernorUpgradeable, IERC165Upgradeable, GovernorTimelockControlUpgradeable) returns (bool) {
-        return super.supportsInterface(interfaceId);
-    }
-
-    /**
-     * @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-    uint256[50] private __gap;
 }

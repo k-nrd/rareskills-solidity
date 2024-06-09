@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.2;
+pragma solidity ^0.8.20;
 
-import "../../../token/ERC20/ERC20Upgradeable.sol";
-import "../../../token/ERC20/extensions/ERC20PermitUpgradeable.sol";
-import "../../../token/ERC20/extensions/ERC20VotesUpgradeable.sol";
+import {ERC20Upgradeable} from "../../../token/ERC20/ERC20Upgradeable.sol";
+import {ERC20PermitUpgradeable} from "../../../token/ERC20/extensions/ERC20PermitUpgradeable.sol";
+import {ERC20VotesUpgradeable} from "../../../token/ERC20/extensions/ERC20VotesUpgradeable.sol";
+import {NoncesUpgradeable} from "../../../utils/NoncesUpgradeable.sol";
 import {Initializable} from "../../../proxy/utils/Initializable.sol";
 
 contract MyTokenUpgradeable is Initializable, ERC20Upgradeable, ERC20PermitUpgradeable, ERC20VotesUpgradeable {
@@ -17,22 +18,11 @@ contract MyTokenUpgradeable is Initializable, ERC20Upgradeable, ERC20PermitUpgra
 
     // The functions below are overrides required by Solidity.
 
-    function _afterTokenTransfer(address from, address to, uint256 amount) internal override(ERC20Upgradeable, ERC20VotesUpgradeable) {
-        super._afterTokenTransfer(from, to, amount);
+    function _update(address from, address to, uint256 amount) internal override(ERC20Upgradeable, ERC20VotesUpgradeable) {
+        super._update(from, to, amount);
     }
 
-    function _mint(address to, uint256 amount) internal override(ERC20Upgradeable, ERC20VotesUpgradeable) {
-        super._mint(to, amount);
+    function nonces(address owner) public view virtual override(ERC20PermitUpgradeable, NoncesUpgradeable) returns (uint256) {
+        return super.nonces(owner);
     }
-
-    function _burn(address account, uint256 amount) internal override(ERC20Upgradeable, ERC20VotesUpgradeable) {
-        super._burn(account, amount);
-    }
-
-    /**
-     * @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-    uint256[50] private __gap;
 }

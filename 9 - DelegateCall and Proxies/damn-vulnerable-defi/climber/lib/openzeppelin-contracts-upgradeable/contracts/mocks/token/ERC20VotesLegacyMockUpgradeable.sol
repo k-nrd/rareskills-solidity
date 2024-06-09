@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
-import "../../token/ERC20/extensions/ERC20PermitUpgradeable.sol";
-import "../../utils/math/MathUpgradeable.sol";
-import "../../governance/utils/IVotesUpgradeable.sol";
-import "../../utils/math/SafeCastUpgradeable.sol";
-import "../../utils/cryptography/ECDSAUpgradeable.sol";
+import {ERC20PermitUpgradeable} from "../../token/ERC20/extensions/ERC20PermitUpgradeable.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Initializable} from "../../proxy/utils/Initializable.sol";
 
 /**
  * @dev Copied from the master branch at commit 86de1e8b6c3fa6b4efa4a5435869d2521be0f5f5
  */
-abstract contract ERC20VotesLegacyMockUpgradeable is Initializable, IVotesUpgradeable, ERC20PermitUpgradeable {
+abstract contract ERC20VotesLegacyMockUpgradeable is Initializable, IVotes, ERC20PermitUpgradeable {
     struct Checkpoint {
         uint32 fromBlock;
         uint224 votes;
@@ -21,8 +21,8 @@ abstract contract ERC20VotesLegacyMockUpgradeable is Initializable, IVotesUpgrad
     bytes32 private constant _DELEGATION_TYPEHASH =
         keccak256("Delegation(address delegatee,uint256 nonce,uint256 expiry)");
 
-    mapping(address => address) private _delegates;
-    mapping(address => Checkpoint[]) private _checkpoints;
+    mapping(address account => address) private _delegatee;
+    mapping(address delegatee => Checkpoint[]) private _checkpoints;
     Checkpoint[] private _totalSupplyCheckpoints;
 
     function __ERC20VotesLegacyMock_init() internal onlyInitializing {
@@ -41,20 +41,20 @@ abstract contract ERC20VotesLegacyMockUpgradeable is Initializable, IVotesUpgrad
      * @dev Get number of checkpoints for `account`.
      */
     function numCheckpoints(address account) public view virtual returns (uint32) {
-        return SafeCastUpgradeable.toUint32(_checkpoints[account].length);
+        return SafeCast.toUint32(_checkpoints[account].length);
     }
 
     /**
      * @dev Get the address `account` is currently delegating to.
      */
-    function delegates(address account) public view virtual override returns (address) {
-        return _delegates[account];
+    function delegates(address account) public view virtual returns (address) {
+        return _delegatee[account];
     }
 
     /**
      * @dev Gets the current votes balance for `account`
      */
-    function getVotes(address account) public view virtual override returns (uint256) {
+    function getVotes(address account) public view virtual returns (uint256) {
         uint256 pos = _checkpoints[account].length;
         unchecked {
             return pos == 0 ? 0 : _checkpoints[account][pos - 1].votes;
@@ -68,7 +68,7 @@ abstract contract ERC20VotesLegacyMockUpgradeable is Initializable, IVotesUpgrad
      *
      * - `blockNumber` must have been already mined
      */
-    function getPastVotes(address account, uint256 blockNumber) public view virtual override returns (uint256) {
+    function getPastVotes(address account, uint256 blockNumber) public view virtual returns (uint256) {
         require(blockNumber < block.number, "ERC20Votes: block not yet mined");
         return _checkpointsLookup(_checkpoints[account], blockNumber);
     }
@@ -81,7 +81,7 @@ abstract contract ERC20VotesLegacyMockUpgradeable is Initializable, IVotesUpgrad
      *
      * - `blockNumber` must have been already mined
      */
-    function getPastTotalSupply(uint256 blockNumber) public view virtual override returns (uint256) {
+    function getPastTotalSupply(uint256 blockNumber) public view virtual returns (uint256) {
         require(blockNumber < block.number, "ERC20Votes: block not yet mined");
         return _checkpointsLookup(_totalSupplyCheckpoints, blockNumber);
     }
@@ -94,7 +94,8 @@ abstract contract ERC20VotesLegacyMockUpgradeable is Initializable, IVotesUpgrad
         //
         // Initially we check if the block is recent to narrow the search range.
         // During the loop, the index of the wanted checkpoint remains in the range [low-1, high).
-        // With each iteration, either `low` or `high` is moved towards the middle of the range to maintain the invariant.
+        // With each iteration, either `low` or `high` is moved towards the middle of the range to maintain the
+        // invariant.
         // - If the middle checkpoint is after `blockNumber`, we look in [low, mid)
         // - If the middle checkpoint is before or equal to `blockNumber`, we look in [mid+1, high)
         // Once we reach a single value (when low == high), we've found the right checkpoint at the index high-1, if not
@@ -108,7 +109,7 @@ abstract contract ERC20VotesLegacyMockUpgradeable is Initializable, IVotesUpgrad
         uint256 high = length;
 
         if (length > 5) {
-            uint256 mid = length - MathUpgradeable.sqrt(length);
+            uint256 mid = length - Math.sqrt(length);
             if (_unsafeAccess(ckpts, mid).fromBlock > blockNumber) {
                 high = mid;
             } else {
@@ -117,7 +118,7 @@ abstract contract ERC20VotesLegacyMockUpgradeable is Initializable, IVotesUpgrad
         }
 
         while (low < high) {
-            uint256 mid = MathUpgradeable.average(low, high);
+            uint256 mid = Math.average(low, high);
             if (_unsafeAccess(ckpts, mid).fromBlock > blockNumber) {
                 high = mid;
             } else {
@@ -133,7 +134,7 @@ abstract contract ERC20VotesLegacyMockUpgradeable is Initializable, IVotesUpgrad
     /**
      * @dev Delegate votes from the sender to `delegatee`.
      */
-    function delegate(address delegatee) public virtual override {
+    function delegate(address delegatee) public virtual {
         _delegate(_msgSender(), delegatee);
     }
 
@@ -147,9 +148,9 @@ abstract contract ERC20VotesLegacyMockUpgradeable is Initializable, IVotesUpgrad
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) public virtual override {
+    ) public virtual {
         require(block.timestamp <= expiry, "ERC20Votes: signature expired");
-        address signer = ECDSAUpgradeable.recover(
+        address signer = ECDSA.recover(
             _hashTypedDataV4(keccak256(abi.encode(_DELEGATION_TYPEHASH, delegatee, nonce, expiry))),
             v,
             r,
@@ -167,31 +168,21 @@ abstract contract ERC20VotesLegacyMockUpgradeable is Initializable, IVotesUpgrad
     }
 
     /**
-     * @dev Snapshots the totalSupply after it has been increased.
-     */
-    function _mint(address account, uint256 amount) internal virtual override {
-        super._mint(account, amount);
-        require(totalSupply() <= _maxSupply(), "ERC20Votes: total supply risks overflowing votes");
-
-        _writeCheckpoint(_totalSupplyCheckpoints, _add, amount);
-    }
-
-    /**
-     * @dev Snapshots the totalSupply after it has been decreased.
-     */
-    function _burn(address account, uint256 amount) internal virtual override {
-        super._burn(account, amount);
-
-        _writeCheckpoint(_totalSupplyCheckpoints, _subtract, amount);
-    }
-
-    /**
      * @dev Move voting power when tokens are transferred.
      *
      * Emits a {IVotes-DelegateVotesChanged} event.
      */
-    function _afterTokenTransfer(address from, address to, uint256 amount) internal virtual override {
-        super._afterTokenTransfer(from, to, amount);
+    function _update(address from, address to, uint256 amount) internal virtual override {
+        super._update(from, to, amount);
+
+        if (from == address(0)) {
+            require(totalSupply() <= _maxSupply(), "ERC20Votes: total supply risks overflowing votes");
+            _writeCheckpoint(_totalSupplyCheckpoints, _add, amount);
+        }
+
+        if (to == address(0)) {
+            _writeCheckpoint(_totalSupplyCheckpoints, _subtract, amount);
+        }
 
         _moveVotingPower(delegates(from), delegates(to), amount);
     }
@@ -204,7 +195,7 @@ abstract contract ERC20VotesLegacyMockUpgradeable is Initializable, IVotesUpgrad
     function _delegate(address delegator, address delegatee) internal virtual {
         address currentDelegate = delegates(delegator);
         uint256 delegatorBalance = balanceOf(delegator);
-        _delegates[delegator] = delegatee;
+        _delegatee[delegator] = delegatee;
 
         emit DelegateChanged(delegator, currentDelegate, delegatee);
 
@@ -239,10 +230,10 @@ abstract contract ERC20VotesLegacyMockUpgradeable is Initializable, IVotesUpgrad
             newWeight = op(oldWeight, delta);
 
             if (pos > 0 && oldCkpt.fromBlock == block.number) {
-                _unsafeAccess(ckpts, pos - 1).votes = SafeCastUpgradeable.toUint224(newWeight);
+                _unsafeAccess(ckpts, pos - 1).votes = SafeCast.toUint224(newWeight);
             } else {
                 ckpts.push(
-                    Checkpoint({fromBlock: SafeCastUpgradeable.toUint32(block.number), votes: SafeCastUpgradeable.toUint224(newWeight)})
+                    Checkpoint({fromBlock: SafeCast.toUint32(block.number), votes: SafeCast.toUint224(newWeight)})
                 );
             }
         }
@@ -265,11 +256,4 @@ abstract contract ERC20VotesLegacyMockUpgradeable is Initializable, IVotesUpgrad
             result.slot := add(keccak256(0, 0x20), pos)
         }
     }
-
-    /**
-     * @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-    uint256[47] private __gap;
 }

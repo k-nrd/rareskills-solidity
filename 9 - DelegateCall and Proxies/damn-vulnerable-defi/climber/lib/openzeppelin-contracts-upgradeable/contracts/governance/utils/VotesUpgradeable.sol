@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: MIT
-// OpenZeppelin Contracts (last updated v4.9.0) (governance/utils/Votes.sol)
-pragma solidity ^0.8.0;
+// OpenZeppelin Contracts (last updated v5.0.0) (governance/utils/Votes.sol)
+pragma solidity ^0.8.20;
 
-import "../../interfaces/IERC5805Upgradeable.sol";
-import "../../utils/ContextUpgradeable.sol";
-import "../../utils/CountersUpgradeable.sol";
-import "../../utils/CheckpointsUpgradeable.sol";
-import "../../utils/cryptography/EIP712Upgradeable.sol";
+import {IERC5805} from "@openzeppelin/contracts/interfaces/IERC5805.sol";
+import {ContextUpgradeable} from "../../utils/ContextUpgradeable.sol";
+import {NoncesUpgradeable} from "../../utils/NoncesUpgradeable.sol";
+import {EIP712Upgradeable} from "../../utils/cryptography/EIP712Upgradeable.sol";
+import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
 import {Initializable} from "../../proxy/utils/Initializable.sol";
 
 /**
@@ -25,26 +28,41 @@ import {Initializable} from "../../proxy/utils/Initializable.sol";
  *
  * When using this module the derived contract must implement {_getVotingUnits} (for example, make it return
  * {ERC721-balanceOf}), and can use {_transferVotingUnits} to track a change in the distribution of those units (in the
- * previous example, it would be included in {ERC721-_beforeTokenTransfer}).
- *
- * _Available since v4.5._
+ * previous example, it would be included in {ERC721-_update}).
  */
-abstract contract VotesUpgradeable is Initializable, ContextUpgradeable, EIP712Upgradeable, IERC5805Upgradeable {
-    using CheckpointsUpgradeable for CheckpointsUpgradeable.Trace224;
-    using CountersUpgradeable for CountersUpgradeable.Counter;
+abstract contract VotesUpgradeable is Initializable, ContextUpgradeable, EIP712Upgradeable, NoncesUpgradeable, IERC5805 {
+    using Checkpoints for Checkpoints.Trace208;
 
-    bytes32 private constant _DELEGATION_TYPEHASH =
+    bytes32 private constant DELEGATION_TYPEHASH =
         keccak256("Delegation(address delegatee,uint256 nonce,uint256 expiry)");
 
-    mapping(address => address) private _delegation;
+    /// @custom:storage-location erc7201:openzeppelin.storage.Votes
+    struct VotesStorage {
+        mapping(address account => address) _delegatee;
 
-    /// @custom:oz-retyped-from mapping(address => Checkpoints.History)
-    mapping(address => CheckpointsUpgradeable.Trace224) private _delegateCheckpoints;
+        mapping(address delegatee => Checkpoints.Trace208) _delegateCheckpoints;
 
-    /// @custom:oz-retyped-from Checkpoints.History
-    CheckpointsUpgradeable.Trace224 private _totalCheckpoints;
+        Checkpoints.Trace208 _totalCheckpoints;
+    }
 
-    mapping(address => CountersUpgradeable.Counter) private _nonces;
+    // keccak256(abi.encode(uint256(keccak256("openzeppelin.storage.Votes")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant VotesStorageLocation = 0xe8b26c30fad74198956032a3533d903385d56dd795af560196f9c78d4af40d00;
+
+    function _getVotesStorage() private pure returns (VotesStorage storage $) {
+        assembly {
+            $.slot := VotesStorageLocation
+        }
+    }
+
+    /**
+     * @dev The clock was incorrectly modified.
+     */
+    error ERC6372InconsistentClock();
+
+    /**
+     * @dev Lookup to future votes is not available.
+     */
+    error ERC5805FutureLookup(uint256 timepoint, uint48 clock);
 
     function __Votes_init() internal onlyInitializing {
     }
@@ -55,25 +73,28 @@ abstract contract VotesUpgradeable is Initializable, ContextUpgradeable, EIP712U
      * @dev Clock used for flagging checkpoints. Can be overridden to implement timestamp based
      * checkpoints (and voting), in which case {CLOCK_MODE} should be overridden as well to match.
      */
-    function clock() public view virtual override returns (uint48) {
-        return SafeCastUpgradeable.toUint48(block.number);
+    function clock() public view virtual returns (uint48) {
+        return Time.blockNumber();
     }
 
     /**
-     * @dev Machine-readable description of the clock as specified in EIP-6372.
+     * @dev Machine-readable description of the clock as specified in ERC-6372.
      */
     // solhint-disable-next-line func-name-mixedcase
-    function CLOCK_MODE() public view virtual override returns (string memory) {
+    function CLOCK_MODE() public view virtual returns (string memory) {
         // Check that the clock was not modified
-        require(clock() == block.number, "Votes: broken clock mode");
+        if (clock() != Time.blockNumber()) {
+            revert ERC6372InconsistentClock();
+        }
         return "mode=blocknumber&from=default";
     }
 
     /**
      * @dev Returns the current amount of votes that `account` has.
      */
-    function getVotes(address account) public view virtual override returns (uint256) {
-        return _delegateCheckpoints[account].latest();
+    function getVotes(address account) public view virtual returns (uint256) {
+        VotesStorage storage $ = _getVotesStorage();
+        return $._delegateCheckpoints[account].latest();
     }
 
     /**
@@ -84,9 +105,13 @@ abstract contract VotesUpgradeable is Initializable, ContextUpgradeable, EIP712U
      *
      * - `timepoint` must be in the past. If operating using block numbers, the block must be already mined.
      */
-    function getPastVotes(address account, uint256 timepoint) public view virtual override returns (uint256) {
-        require(timepoint < clock(), "Votes: future lookup");
-        return _delegateCheckpoints[account].upperLookupRecent(SafeCastUpgradeable.toUint32(timepoint));
+    function getPastVotes(address account, uint256 timepoint) public view virtual returns (uint256) {
+        VotesStorage storage $ = _getVotesStorage();
+        uint48 currentTimepoint = clock();
+        if (timepoint >= currentTimepoint) {
+            revert ERC5805FutureLookup(timepoint, currentTimepoint);
+        }
+        return $._delegateCheckpoints[account].upperLookupRecent(SafeCast.toUint48(timepoint));
     }
 
     /**
@@ -101,29 +126,35 @@ abstract contract VotesUpgradeable is Initializable, ContextUpgradeable, EIP712U
      *
      * - `timepoint` must be in the past. If operating using block numbers, the block must be already mined.
      */
-    function getPastTotalSupply(uint256 timepoint) public view virtual override returns (uint256) {
-        require(timepoint < clock(), "Votes: future lookup");
-        return _totalCheckpoints.upperLookupRecent(SafeCastUpgradeable.toUint32(timepoint));
+    function getPastTotalSupply(uint256 timepoint) public view virtual returns (uint256) {
+        VotesStorage storage $ = _getVotesStorage();
+        uint48 currentTimepoint = clock();
+        if (timepoint >= currentTimepoint) {
+            revert ERC5805FutureLookup(timepoint, currentTimepoint);
+        }
+        return $._totalCheckpoints.upperLookupRecent(SafeCast.toUint48(timepoint));
     }
 
     /**
      * @dev Returns the current total supply of votes.
      */
     function _getTotalSupply() internal view virtual returns (uint256) {
-        return _totalCheckpoints.latest();
+        VotesStorage storage $ = _getVotesStorage();
+        return $._totalCheckpoints.latest();
     }
 
     /**
      * @dev Returns the delegate that `account` has chosen.
      */
-    function delegates(address account) public view virtual override returns (address) {
-        return _delegation[account];
+    function delegates(address account) public view virtual returns (address) {
+        VotesStorage storage $ = _getVotesStorage();
+        return $._delegatee[account];
     }
 
     /**
      * @dev Delegates votes from the sender to `delegatee`.
      */
-    function delegate(address delegatee) public virtual override {
+    function delegate(address delegatee) public virtual {
         address account = _msgSender();
         _delegate(account, delegatee);
     }
@@ -138,15 +169,17 @@ abstract contract VotesUpgradeable is Initializable, ContextUpgradeable, EIP712U
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) public virtual override {
-        require(block.timestamp <= expiry, "Votes: signature expired");
-        address signer = ECDSAUpgradeable.recover(
-            _hashTypedDataV4(keccak256(abi.encode(_DELEGATION_TYPEHASH, delegatee, nonce, expiry))),
+    ) public virtual {
+        if (block.timestamp > expiry) {
+            revert VotesExpiredSignature(expiry);
+        }
+        address signer = ECDSA.recover(
+            _hashTypedDataV4(keccak256(abi.encode(DELEGATION_TYPEHASH, delegatee, nonce, expiry))),
             v,
             r,
             s
         );
-        require(nonce == _useNonce(signer), "Votes: invalid nonce");
+        _useCheckedNonce(signer, nonce);
         _delegate(signer, delegatee);
     }
 
@@ -156,8 +189,9 @@ abstract contract VotesUpgradeable is Initializable, ContextUpgradeable, EIP712U
      * Emits events {IVotes-DelegateChanged} and {IVotes-DelegateVotesChanged}.
      */
     function _delegate(address account, address delegatee) internal virtual {
+        VotesStorage storage $ = _getVotesStorage();
         address oldDelegate = delegates(account);
-        _delegation[account] = delegatee;
+        $._delegatee[account] = delegatee;
 
         emit DelegateChanged(account, oldDelegate, delegatee);
         _moveDelegateVotes(oldDelegate, delegatee, _getVotingUnits(account));
@@ -168,11 +202,12 @@ abstract contract VotesUpgradeable is Initializable, ContextUpgradeable, EIP712U
      * should be zero. Total supply of voting units will be adjusted with mints and burns.
      */
     function _transferVotingUnits(address from, address to, uint256 amount) internal virtual {
+        VotesStorage storage $ = _getVotesStorage();
         if (from == address(0)) {
-            _push(_totalCheckpoints, _add, SafeCastUpgradeable.toUint224(amount));
+            _push($._totalCheckpoints, _add, SafeCast.toUint208(amount));
         }
         if (to == address(0)) {
-            _push(_totalCheckpoints, _subtract, SafeCastUpgradeable.toUint224(amount));
+            _push($._totalCheckpoints, _subtract, SafeCast.toUint208(amount));
         }
         _moveDelegateVotes(delegates(from), delegates(to), amount);
     }
@@ -180,78 +215,65 @@ abstract contract VotesUpgradeable is Initializable, ContextUpgradeable, EIP712U
     /**
      * @dev Moves delegated votes from one delegate to another.
      */
-    function _moveDelegateVotes(address from, address to, uint256 amount) private {
+    function _moveDelegateVotes(address from, address to, uint256 amount) internal virtual {
+        VotesStorage storage $ = _getVotesStorage();
         if (from != to && amount > 0) {
             if (from != address(0)) {
                 (uint256 oldValue, uint256 newValue) = _push(
-                    _delegateCheckpoints[from],
+                    $._delegateCheckpoints[from],
                     _subtract,
-                    SafeCastUpgradeable.toUint224(amount)
+                    SafeCast.toUint208(amount)
                 );
                 emit DelegateVotesChanged(from, oldValue, newValue);
             }
             if (to != address(0)) {
                 (uint256 oldValue, uint256 newValue) = _push(
-                    _delegateCheckpoints[to],
+                    $._delegateCheckpoints[to],
                     _add,
-                    SafeCastUpgradeable.toUint224(amount)
+                    SafeCast.toUint208(amount)
                 );
                 emit DelegateVotesChanged(to, oldValue, newValue);
             }
         }
     }
 
-    function _push(
-        CheckpointsUpgradeable.Trace224 storage store,
-        function(uint224, uint224) view returns (uint224) op,
-        uint224 delta
-    ) private returns (uint224, uint224) {
-        return store.push(SafeCastUpgradeable.toUint32(clock()), op(store.latest(), delta));
+    /**
+     * @dev Get number of checkpoints for `account`.
+     */
+    function _numCheckpoints(address account) internal view virtual returns (uint32) {
+        VotesStorage storage $ = _getVotesStorage();
+        return SafeCast.toUint32($._delegateCheckpoints[account].length());
     }
 
-    function _add(uint224 a, uint224 b) private pure returns (uint224) {
+    /**
+     * @dev Get the `pos`-th checkpoint for `account`.
+     */
+    function _checkpoints(
+        address account,
+        uint32 pos
+    ) internal view virtual returns (Checkpoints.Checkpoint208 memory) {
+        VotesStorage storage $ = _getVotesStorage();
+        return $._delegateCheckpoints[account].at(pos);
+    }
+
+    function _push(
+        Checkpoints.Trace208 storage store,
+        function(uint208, uint208) view returns (uint208) op,
+        uint208 delta
+    ) private returns (uint208, uint208) {
+        return store.push(clock(), op(store.latest(), delta));
+    }
+
+    function _add(uint208 a, uint208 b) private pure returns (uint208) {
         return a + b;
     }
 
-    function _subtract(uint224 a, uint224 b) private pure returns (uint224) {
+    function _subtract(uint208 a, uint208 b) private pure returns (uint208) {
         return a - b;
-    }
-
-    /**
-     * @dev Consumes a nonce.
-     *
-     * Returns the current value and increments nonce.
-     */
-    function _useNonce(address owner) internal virtual returns (uint256 current) {
-        CountersUpgradeable.Counter storage nonce = _nonces[owner];
-        current = nonce.current();
-        nonce.increment();
-    }
-
-    /**
-     * @dev Returns an address nonce.
-     */
-    function nonces(address owner) public view virtual returns (uint256) {
-        return _nonces[owner].current();
-    }
-
-    /**
-     * @dev Returns the contract's {EIP712} domain separator.
-     */
-    // solhint-disable-next-line func-name-mixedcase
-    function DOMAIN_SEPARATOR() external view returns (bytes32) {
-        return _domainSeparatorV4();
     }
 
     /**
      * @dev Must return the voting units held by an account.
      */
     function _getVotingUnits(address) internal view virtual returns (uint256);
-
-    /**
-     * @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-    uint256[46] private __gap;
 }

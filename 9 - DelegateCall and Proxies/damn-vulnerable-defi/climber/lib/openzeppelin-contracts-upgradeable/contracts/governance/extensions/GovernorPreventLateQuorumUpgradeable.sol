@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-// OpenZeppelin Contracts (last updated v4.9.0) (governance/extensions/GovernorPreventLateQuorum.sol)
+// OpenZeppelin Contracts (last updated v5.0.0) (governance/extensions/GovernorPreventLateQuorum.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
-import "../GovernorUpgradeable.sol";
-import "../../utils/math/MathUpgradeable.sol";
+import {GovernorUpgradeable} from "../GovernorUpgradeable.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {Initializable} from "../../proxy/utils/Initializable.sol";
 
 /**
@@ -15,14 +15,23 @@ import {Initializable} from "../../proxy/utils/Initializable.sol";
  * If a vote causes quorum to be reached, the proposal's voting period may be extended so that it does not end before at
  * least a specified time has passed (the "vote extension" parameter). This parameter can be set through a governance
  * proposal.
- *
- * _Available since v4.5._
  */
 abstract contract GovernorPreventLateQuorumUpgradeable is Initializable, GovernorUpgradeable {
-    uint64 private _voteExtension;
+    /// @custom:storage-location erc7201:openzeppelin.storage.GovernorPreventLateQuorum
+    struct GovernorPreventLateQuorumStorage {
+        uint48 _voteExtension;
 
-    /// @custom:oz-retyped-from mapping(uint256 => Timers.BlockNumber)
-    mapping(uint256 => uint64) private _extendedDeadlines;
+        mapping(uint256 proposalId => uint48) _extendedDeadlines;
+    }
+
+    // keccak256(abi.encode(uint256(keccak256("openzeppelin.storage.GovernorPreventLateQuorum")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant GovernorPreventLateQuorumStorageLocation = 0x042f525fd47e44d02e065dd7bb464f47b4f926fbd05b5e087891ebd756adf100;
+
+    function _getGovernorPreventLateQuorumStorage() private pure returns (GovernorPreventLateQuorumStorage storage $) {
+        assembly {
+            $.slot := GovernorPreventLateQuorumStorageLocation
+        }
+    }
 
     /// @dev Emitted when a proposal deadline is pushed back due to reaching quorum late in its voting period.
     event ProposalExtended(uint256 indexed proposalId, uint64 extendedDeadline);
@@ -31,15 +40,15 @@ abstract contract GovernorPreventLateQuorumUpgradeable is Initializable, Governo
     event LateQuorumVoteExtensionSet(uint64 oldVoteExtension, uint64 newVoteExtension);
 
     /**
-     * @dev Initializes the vote extension parameter: the time in either number of blocks or seconds (depending on the governor
-     * clock mode) that is required to pass since the moment a proposal reaches quorum until its voting period ends. If
-     * necessary the voting period will be extended beyond the one set during proposal creation.
+     * @dev Initializes the vote extension parameter: the time in either number of blocks or seconds (depending on the
+     * governor clock mode) that is required to pass since the moment a proposal reaches quorum until its voting period
+     * ends. If necessary the voting period will be extended beyond the one set during proposal creation.
      */
-    function __GovernorPreventLateQuorum_init(uint64 initialVoteExtension) internal onlyInitializing {
+    function __GovernorPreventLateQuorum_init(uint48 initialVoteExtension) internal onlyInitializing {
         __GovernorPreventLateQuorum_init_unchained(initialVoteExtension);
     }
 
-    function __GovernorPreventLateQuorum_init_unchained(uint64 initialVoteExtension) internal onlyInitializing {
+    function __GovernorPreventLateQuorum_init_unchained(uint48 initialVoteExtension) internal onlyInitializing {
         _setLateQuorumVoteExtension(initialVoteExtension);
     }
 
@@ -48,7 +57,8 @@ abstract contract GovernorPreventLateQuorumUpgradeable is Initializable, Governo
      * proposal reached quorum late in the voting period. See {Governor-proposalDeadline}.
      */
     function proposalDeadline(uint256 proposalId) public view virtual override returns (uint256) {
-        return MathUpgradeable.max(super.proposalDeadline(proposalId), _extendedDeadlines[proposalId]);
+        GovernorPreventLateQuorumStorage storage $ = _getGovernorPreventLateQuorumStorage();
+        return Math.max(super.proposalDeadline(proposalId), $._extendedDeadlines[proposalId]);
     }
 
     /**
@@ -64,16 +74,17 @@ abstract contract GovernorPreventLateQuorumUpgradeable is Initializable, Governo
         string memory reason,
         bytes memory params
     ) internal virtual override returns (uint256) {
+        GovernorPreventLateQuorumStorage storage $ = _getGovernorPreventLateQuorumStorage();
         uint256 result = super._castVote(proposalId, account, support, reason, params);
 
-        if (_extendedDeadlines[proposalId] == 0 && _quorumReached(proposalId)) {
-            uint64 extendedDeadline = clock() + lateQuorumVoteExtension();
+        if ($._extendedDeadlines[proposalId] == 0 && _quorumReached(proposalId)) {
+            uint48 extendedDeadline = clock() + lateQuorumVoteExtension();
 
             if (extendedDeadline > proposalDeadline(proposalId)) {
                 emit ProposalExtended(proposalId, extendedDeadline);
             }
 
-            _extendedDeadlines[proposalId] = extendedDeadline;
+            $._extendedDeadlines[proposalId] = extendedDeadline;
         }
 
         return result;
@@ -83,8 +94,9 @@ abstract contract GovernorPreventLateQuorumUpgradeable is Initializable, Governo
      * @dev Returns the current value of the vote extension parameter: the number of blocks that are required to pass
      * from the time a proposal reaches quorum until its voting period ends.
      */
-    function lateQuorumVoteExtension() public view virtual returns (uint64) {
-        return _voteExtension;
+    function lateQuorumVoteExtension() public view virtual returns (uint48) {
+        GovernorPreventLateQuorumStorage storage $ = _getGovernorPreventLateQuorumStorage();
+        return $._voteExtension;
     }
 
     /**
@@ -93,7 +105,7 @@ abstract contract GovernorPreventLateQuorumUpgradeable is Initializable, Governo
      *
      * Emits a {LateQuorumVoteExtensionSet} event.
      */
-    function setLateQuorumVoteExtension(uint64 newVoteExtension) public virtual onlyGovernance {
+    function setLateQuorumVoteExtension(uint48 newVoteExtension) public virtual onlyGovernance {
         _setLateQuorumVoteExtension(newVoteExtension);
     }
 
@@ -103,15 +115,9 @@ abstract contract GovernorPreventLateQuorumUpgradeable is Initializable, Governo
      *
      * Emits a {LateQuorumVoteExtensionSet} event.
      */
-    function _setLateQuorumVoteExtension(uint64 newVoteExtension) internal virtual {
-        emit LateQuorumVoteExtensionSet(_voteExtension, newVoteExtension);
-        _voteExtension = newVoteExtension;
+    function _setLateQuorumVoteExtension(uint48 newVoteExtension) internal virtual {
+        GovernorPreventLateQuorumStorage storage $ = _getGovernorPreventLateQuorumStorage();
+        emit LateQuorumVoteExtensionSet($._voteExtension, newVoteExtension);
+        $._voteExtension = newVoteExtension;
     }
-
-    /**
-     * @dev This empty reserved space is put in place to allow future versions to add new
-     * variables without shifting down storage in the inheritance chain.
-     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
-     */
-    uint256[48] private __gap;
 }
