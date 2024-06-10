@@ -1,0 +1,5 @@
+forge-std/=lib/forge-std/src/
+@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
+safe-smart-account/=lib/safe-smart-account/contracts/
+solady/=lib/solady/src/
+solmate/=lib/solmate/src/
