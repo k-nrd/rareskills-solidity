@@ -1,37 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.23;
 
-import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {Nonces} from "@openzeppelin/contracts/utils/Nonces.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {IPermitToken} from "./IPermitToken.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
+import {SwapOffer, SignedOrder, SignedPermit, Order, ORDER_TYPEHASH} from "./GaslessExchangeEIP712.sol";
 
-struct Order {
-    address owner;
-    address sellToken;
-    address buyToken;
-    uint256 sellAmount;
-    uint256 buyAmount;
-    uint256 expires;
-    uint256 nonce;
-}
-
-struct Permit {
-    address owner;
-    address spender;
-    uint256 value;
-    uint256 nonce;
-    uint256 deadline;
-}
-
-struct SignedOrder {
-    Order order;
-    Permit permit;
-    uint8 v;
-    bytes32 r;
-    bytes32 s;
-}
-
-contract GaslessExchange is EIP712("GaslessExchange", "1") {
+contract GaslessExchange is EIP712("GaslessExchange", "1"), Nonces {
     error InvalidOrder(address owner, uint256 nonce);
     error InvalidPair(
         address orderAOwner,
@@ -40,165 +17,172 @@ contract GaslessExchange is EIP712("GaslessExchange", "1") {
         uint256 nonceB
     );
 
-    bytes32 public constant ORDER_TYPEHASH =
-        keccak256(
-            "Order(address owner,address sellToken,address buyToken,uint256 sellAmount,uint256 buyAmount,uint256 expires,uint256 nonce)"
-        );
+    ERC20Permit public immutable token0;
+    ERC20Permit public immutable token1;
 
-    IPermitToken public immutable token0;
-    IPermitToken public immutable token1;
-
-    mapping(address account => uint256) private nonces;
-
-    constructor(IPermitToken _token0, IPermitToken _token1) {
+    constructor(ERC20Permit _token0, ERC20Permit _token1) {
         token0 = _token0;
         token1 = _token1;
     }
 
     function swap(
-        SignedOrder memory signedOrderA,
-        SignedOrder memory signedOrderB
+        SwapOffer memory swapOfferA,
+        SwapOffer memory swapOfferB
     ) external {
-        (Order memory orderA, Permit memory permitA) = (
-            signedOrderA.order,
-            signedOrderA.permit
+        (SignedOrder memory orderA, SignedPermit memory permitA) = (
+            swapOfferA.signedOrder,
+            swapOfferA.signedPermit
         );
-        (Order memory orderB, Permit memory permitB) = (
-            signedOrderB.order,
-            signedOrderB.permit
+        (SignedOrder memory orderB, SignedPermit memory permitB) = (
+            swapOfferB.signedOrder,
+            swapOfferB.signedPermit
         );
 
-        if (!isValidOrder(signedOrderA)) {
-            revert InvalidOrder(orderA.owner, orderA.nonce);
+        if (!isValidOrder(orderA)) {
+            revert InvalidOrder(orderA.order.owner, orderA.order.nonce);
         }
-        if (!isValidOrder(signedOrderB)) {
-            revert InvalidOrder(orderB.owner, orderB.nonce);
+        if (!isValidOrder(orderB)) {
+            revert InvalidOrder(orderB.order.owner, orderB.order.nonce);
         }
-        if (!isValidPair(orderA, orderB)) {
+        if (!isValidOrderPair(orderA.order, orderB.order)) {
             revert InvalidPair(
-                orderA.owner,
-                orderB.owner,
-                orderA.nonce,
-                orderB.nonce
+                orderA.order.owner,
+                orderB.order.owner,
+                orderA.order.nonce,
+                orderB.order.nonce
             );
         }
 
         // Permit sells
-        IPermitToken(orderA.sellToken).permit(
-            permitA.owner,
-            permitA.spender,
-            permitA.value,
-            permitA.deadline,
-            signedOrderA.v,
-            signedOrderA.r,
-            signedOrderA.s
+        ERC20Permit tokenOutA = ERC20Permit(orderA.order.tokenOut);
+        ERC20Permit tokenOutB = ERC20Permit(orderB.order.tokenOut);
+
+        tokenOutA.permit(
+            permitA.permit.owner,
+            permitA.permit.spender,
+            permitA.permit.value,
+            permitA.permit.deadline,
+            permitA.v,
+            permitA.r,
+            permitA.s
         );
-        IPermitToken(orderB.sellToken).permit(
-            permitB.owner,
-            permitB.spender,
-            permitB.value,
-            permitB.deadline,
-            signedOrderB.v,
-            signedOrderB.r,
-            signedOrderB.s
+        tokenOutB.permit(
+            permitB.permit.owner,
+            permitB.permit.spender,
+            permitB.permit.value,
+            permitB.permit.deadline,
+            permitB.v,
+            permitB.r,
+            permitB.s
         );
 
-        // Use nonces
-        nonces[orderA.owner] = orderA.nonce + 1;
-        nonces[orderB.owner] = orderB.nonce + 1;
+        // Execute swap using the smaller amounts (ratio was already validated)
+        // If A wants to sell more than B wants to sell,
+        // Use order B amounts. Else, use order A amounts.
+        (uint256 tokenOutAAmount, uint256 tokenOutBAmount) = orderA
+            .order
+            .amountOut > orderB.order.amountOut
+            ? (orderB.order.amountIn, orderB.order.amountOut)
+            : (orderA.order.amountOut, orderA.order.amountIn);
 
-        // Execute swap using the smaller amounts (ratio is valid)
-        // If A wants to buy less than B wants to sell, use orderA amounts
-        // otherwise, use orderB amounts
-        (uint256 token0Amount, uint256 token1Amount) = orderA.buyAmount <
-            orderB.sellAmount
-            ? (orderA.buyAmount, orderA.sellAmount)
-            : (orderB.buyAmount, orderB.sellAmount);
-
-        token0.transferFrom(orderA.owner, orderB.owner, token0Amount);
-        token1.transferFrom(orderB.owner, orderA.owner, token1Amount);
+        tokenOutA.transferFrom(
+            orderA.order.owner,
+            orderB.order.owner,
+            tokenOutAAmount
+        );
+        tokenOutB.transferFrom(
+            orderB.order.owner,
+            orderA.order.owner,
+            tokenOutBAmount
+        );
     }
 
     function ratesMatch(
         Order memory orderA,
         Order memory orderB
     ) internal pure returns (bool) {
-        if (orderA.sellAmount == orderA.buyAmount) {
+        if (orderA.amountOut == orderA.amountIn) {
             return true;
-        } else if (orderA.sellAmount > orderA.buyAmount) {
+        } else if (orderA.amountOut > orderA.amountIn) {
             return
-                orderA.sellAmount / orderA.buyAmount ==
-                orderB.buyAmount / orderB.sellAmount;
+                orderA.amountOut / orderA.amountIn ==
+                orderB.amountIn / orderB.amountOut;
         }
         return
-            orderA.buyAmount / orderA.sellAmount ==
-            orderB.sellAmount / orderB.buyAmount;
+            orderA.amountIn / orderA.amountOut ==
+            orderB.amountOut / orderB.amountIn;
     }
 
-    function isValidPair(
+    function isValidOrderPair(
         Order memory orderA,
         Order memory orderB
     ) public pure returns (bool) {
         return
-            orderA.sellToken == orderB.buyToken &&
-            orderA.buyToken == orderB.sellToken &&
+            orderA.tokenOut == orderB.tokenIn &&
+            orderA.tokenIn == orderB.tokenOut &&
             ratesMatch(orderA, orderB);
     }
 
     function isValidOrder(
-        SignedOrder memory signedOrder
-    ) public view returns (bool) {
-        // Order expired
-        if (block.timestamp > signedOrder.order.expires) {
-            return false;
-        }
+        SignedOrder memory _signedOrder
+    ) public returns (bool) {
+        Order memory _order = _signedOrder.order;
 
-        // Nonce already used
-        if (signedOrder.order.nonce < nonces[signedOrder.order.owner]) {
+        // Order expired
+        if (block.timestamp > _order.deadline) {
             return false;
         }
 
         // Invalid tokens
-        if (signedOrder.order.sellToken == signedOrder.order.buyToken) {
+        if (_order.tokenOut == _order.tokenIn) {
             return false;
         }
         if (
-            signedOrder.order.sellToken != address(token0) &&
-            signedOrder.order.sellToken != address(token1)
+            _order.tokenOut != address(token0) &&
+            _order.tokenOut != address(token1)
         ) {
             return false;
         }
         if (
-            signedOrder.order.buyToken != address(token0) &&
-            signedOrder.order.buyToken != address(token1)
+            _order.tokenIn != address(token0) &&
+            _order.tokenIn != address(token1)
         ) {
             return false;
         }
 
-        bytes32 structHash = keccak256(
-            abi.encode(
-                ORDER_TYPEHASH,
-                signedOrder.order.owner,
-                signedOrder.order.sellToken,
-                signedOrder.order.buyToken,
-                signedOrder.order.sellAmount,
-                signedOrder.order.buyAmount,
-                signedOrder.order.expires,
-                signedOrder.order.nonce
-            )
-        );
-
-        address signer = ECDSA.recover(
-            _hashTypedDataV4(structHash),
-            signedOrder.v,
-            signedOrder.r,
-            signedOrder.s
-        );
-
-        return signer != signedOrder.order.owner;
+        return verifyOrder(_signedOrder);
     }
 
     function DOMAIN_SEPARATOR() external view virtual returns (bytes32) {
         return _domainSeparatorV4();
+    }
+
+    function nonces(address owner) public view override returns (uint256) {
+        return super.nonces(owner);
+    }
+
+    function verifyOrder(
+        SignedOrder memory signedOrder
+    ) internal returns (bool) {
+        bytes32 structHash = keccak256(
+            abi.encode(
+                ORDER_TYPEHASH,
+                signedOrder.order.owner,
+                signedOrder.order.tokenOut,
+                signedOrder.order.tokenIn,
+                signedOrder.order.amountOut,
+                signedOrder.order.amountIn,
+                _useNonce(signedOrder.order.owner),
+                signedOrder.order.deadline
+            )
+        );
+
+        return
+            ECDSA.recover(
+                _hashTypedDataV4(structHash),
+                signedOrder.v,
+                signedOrder.r,
+                signedOrder.s
+            ) == signedOrder.order.owner;
     }
 }
